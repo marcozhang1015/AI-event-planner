@@ -54,8 +54,8 @@ const HOLD_MS = 220;
 /** 用户发出去之后，Juno 的输入指示再过这么久才出现。 */
 const REACT_MS = 500;
 
-function opener(name: string, tail: string): string {
-  return `Hi ${name}, it's Juno — Peter wants to go hiking and then grab dinner. Want to come? ${tail}`;
+function opener(name: string): string {
+  return `Hi ${name}, it's Juno — Peter wants to go hiking and then grab dinner. Want to come? If you have a trail or a restaurant in mind, tell me that too.`;
 }
 
 const threads: ThreadSpec[] = [
@@ -63,7 +63,7 @@ const threads: ThreadSpec[] = [
     person: { id: "marco", name: "Marco" },
     startMs: 400,
     steps: [
-      { kind: "juno", typingMs: 650, pauseMs: 0, text: opener("Marco", "If you have a time, a trail, or a restaurant in mind, tell me that too.") },
+      { kind: "juno", typingMs: 650, pauseMs: 0, text: opener("Marco") },
       { kind: "wait", ms: 715 },
       { kind: "user", text: "Yeah — after 3 works, but I need to be home by 10.", charMs: CHAR_MS, holdMs: HOLD_MS },
       { kind: "juno", typingMs: 1400, text: "So Saturday, free from 3 and home by 10. Would starting the hike at 3:30 be easier?" },
@@ -76,7 +76,7 @@ const threads: ThreadSpec[] = [
     person: { id: "phil", name: "Phil" },
     startMs: 400,
     steps: [
-      { kind: "juno", typingMs: 650, pauseMs: 0, text: opener("Phil", "A spot you'd like to hike, or a place to eat, is welcome too.") },
+      { kind: "juno", typingMs: 650, pauseMs: 0, text: opener("Phil") },
       { kind: "wait", ms: 165 },
       { kind: "user", text: "I'm in. Somewhere scenic, but please nothing too steep.", charMs: CHAR_MS, holdMs: HOLD_MS },
       { kind: "juno", typingMs: 1500, text: "Scenic and moderate. Riverside Trail is about 4 miles, and we can skip the steep spur." },
@@ -100,7 +100,7 @@ const threads: ThreadSpec[] = [
     person: { id: "josh", name: "Josh" },
     startMs: 400,
     steps: [
-      { kind: "juno", typingMs: 650, pauseMs: 0, text: opener("Josh", "Tell me if a certain trail or restaurant would work better for you.") },
+      { kind: "juno", typingMs: 650, pauseMs: 0, text: opener("Josh") },
       { kind: "wait", ms: 860 },
       { kind: "user", text: "Count me in. I'm vegetarian — a real veg dish, not just a side salad.", charMs: CHAR_MS, holdMs: HOLD_MS },
       { kind: "juno", typingMs: 1500, text: "Noted, vegetarian. Maple Kitchen has veg mains, and they can keep nuts off the plate." },
@@ -124,7 +124,7 @@ const threads: ThreadSpec[] = [
     person: { id: "alvin", name: "Alvin" },
     startMs: 400,
     steps: [
-      { kind: "juno", typingMs: 650, pauseMs: 0, text: opener("Alvin", "You can also send a place or restaurant you'd rather go to.") },
+      { kind: "juno", typingMs: 650, pauseMs: 0, text: opener("Alvin") },
       { kind: "wait", ms: 425 },
       { kind: "user", text: "I can drive — three seats, leaving from North Station.", charMs: CHAR_MS, holdMs: HOLD_MS },
       { kind: "juno", typingMs: 1500, text: "Three seats from North Station helps. Peter capped the day at $40 each. Does that work?" },

@@ -44,6 +44,8 @@ export interface ReactAction {
   to: Handle;
   messageId: string;
   emoji: string;
+  /** 平台不支持 tapback 时改发这句话。 */
+  fallback?: string;
 }
 
 export interface EmailAction {
@@ -54,7 +56,14 @@ export interface EmailAction {
   delivery?: DeliveryTag;
 }
 
-export type Outbound = SendAction | ReactAction | EmailAction;
+export interface ScheduledAction {
+  kind: "schedule";
+  to: Handle;
+  dueAt: string;
+  action: SendAction;
+}
+
+export type Outbound = SendAction | ReactAction | EmailAction | ScheduledAction;
 
 export function say(to: Handle, ...parts: OutPart[]): SendAction {
   return { kind: "send", to, parts };
@@ -70,6 +79,10 @@ export function tell(to: Handle, name: string, organizer: Handle, parts: OutPart
   return { kind: "send", to, parts, onFail: { notify: organizer, name, retry: extra.retry }, delivery: extra.delivery };
 }
 
-export function react(to: Handle, messageId: string, emoji: string): ReactAction {
-  return { kind: "react", to, messageId, emoji };
+export function react(to: Handle, messageId: string, emoji: string, fallback?: string): ReactAction {
+  return { kind: "react", to, messageId, emoji, fallback };
+}
+
+export function later(to: Handle, dueAt: Date, ...parts: OutPart[]): ScheduledAction {
+  return { kind: "schedule", to, dueAt: dueAt.toISOString(), action: say(to, ...parts) };
 }

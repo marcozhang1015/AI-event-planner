@@ -32,7 +32,7 @@ export interface PipelineOptions {
 }
 
 const MAX_ATTEMPTS = 3;
-const TICK_MS = 30_000;
+const TICK_MS = 500;
 
 /** 只留下用户输入；已读回执、typing、群事件、附件等 hackathon 版不处理。 */
 function toLog(handle: Handle, message: Message): MessageLog | undefined {

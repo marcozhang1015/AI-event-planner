@@ -38,6 +38,7 @@ type Item = string | Omit<Incoming, "id">;
 
 export interface HarnessOptions {
   brain?: Brain;
+  scriptedPeter?: boolean;
   maps?: Maps;
   contacts?: Contact[];
   quietHours?: QuietHours;
@@ -61,6 +62,7 @@ export class Harness {
     return {
       db,
       brain: this.options.brain ?? offlineBrain,
+      scriptedPeter: this.options.scriptedPeter,
       maps: this.options.maps ?? new SampleMaps(),
       now: this.now,
       timezone: "America/Chicago",

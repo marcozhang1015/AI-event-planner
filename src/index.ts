@@ -63,6 +63,7 @@ if (simHub) console.log(`[juno] 模拟器：${server.url}sim${config.simKey ? `?
 const flowDeps = {
   ...site,
   brain,
+  scriptedPeter: !config.llm || (!Bun.env.ANTHROPIC_API_KEY && !Bun.env.ANTHROPIC_AUTH_TOKEN),
   maps,
   contacts,
   timezone: config.timezone,

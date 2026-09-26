@@ -15,6 +15,8 @@ import { newToken } from "../store/db";
 export interface FlowDeps extends ViewOptions {
   db: ChangeSet;
   brain: Brain;
+  /** LLM 关闭时给 Peter 使用的固定真机演示剧本。 */
+  scriptedPeter?: boolean;
   maps: Maps;
   now: Date;
   timezone: string;

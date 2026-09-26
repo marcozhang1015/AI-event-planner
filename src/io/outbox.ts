@@ -36,6 +36,10 @@ export class Outbox {
     const quiet = sender === undefined ? undefined : quietUntil(now(), timezone, quietHours);
     const failures = new Map<Handle, FailureNotice[]>();
     for (const action of actions) {
+      if (action.kind === "schedule") {
+        this.defer(action.action, new Date(action.dueAt));
+        continue;
+      }
       if (action.kind === "react") {
         await this.react(action);
         continue;
@@ -110,6 +114,7 @@ export class Outbox {
       await this.options.transport.react(action.messageId, action.emoji);
     } catch (error) {
       console.warn(`[send] 给 ${action.to} 点 tapback 失败`, error);
+      if (action.fallback) await this.dispatch(say(action.to, action.fallback));
     }
   }
 }

@@ -118,7 +118,9 @@ export class Transport implements TransportLike {
   }
 
   async react(messageId: string, emoji: string): Promise<void> {
-    await this.recent.get(messageId)?.react(emoji);
+    const message = this.recent.get(messageId);
+    if (!message) throw new Error(`找不到可点 tapback 的消息 ${messageId}`);
+    await message.react(emoji);
   }
 
   /** 只在聊过的会话里显示 typing，不为了 typing 去新建会话。 */
