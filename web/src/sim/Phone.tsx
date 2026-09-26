@@ -1,7 +1,20 @@
 // 一部模拟的 iPhone：一个人和 Juno 的私聊。手机里面尽量还原 iMessage 浅色界面。
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import type { SimItem, SimPerson } from "@shared/sim";
+
+function MessageText({ text }: { text: string }) {
+  return text.split("\n").map((line, index) => {
+    if (!line) return <span key={index} className="line gap" />;
+    return (
+      <span key={index} className={line.startsWith("• ") ? "line bullet" : "line"}>
+        {line.split(/(\*\*[^*]+\*\*)/g).map((part, partIndex) =>
+          part.startsWith("**") && part.endsWith("**") && part.length > 4 ? <strong key={partIndex}>{part.slice(2, -2)}</strong> : part,
+        )}
+      </span>
+    );
+  });
+}
 
 const TAPBACKS = ["👍", "❤️", "😂", "‼️", "❓"];
 const CONFETTI_COLORS = ["#ff5a5f", "#ffb23f", "#3ddc84", "#0a84ff", "#bf5af2", "#ffd60a"];
@@ -20,6 +33,7 @@ interface PhoneProps {
   scriptDraft?: string;
   composing?: boolean;
   showHandle?: boolean;
+  focus?: string;
 }
 
 function Confetti() {
@@ -58,8 +72,9 @@ function Confetti() {
   );
 }
 
-/** 链接预览卡。看板和个人页的链接会去读活动标题，和 iMessage 的原生链接预览一样显示。 */
-function LinkCard({ url }: { url: string }) {
+/** 链接预览卡。录屏里的地点和餐厅使用固定预览，Juno 页面仍异步读取活动标题。 */
+function LinkCard({ item }: { item: SimItem }) {
+  const url = item.url ?? "#";
   const parsed = useMemo(() => {
     try {
       return new URL(url);
@@ -82,6 +97,47 @@ function LinkCard({ url }: { url: string }) {
       alive = false;
     };
   }, [route?.[1], route?.[2]]);
+
+  if (item.preview?.provider === "google-maps") {
+    return (
+      <a className="link-card link-card-maps" href={url} target="_blank" rel="noreferrer">
+        <span className="map-preview" aria-hidden>
+          <i className="map-road road-one" />
+          <i className="map-road road-two" />
+          <i className="map-water" />
+          <i className="map-pin" />
+          <span className="maps-badge">Google Maps</span>
+        </span>
+        <span className="link-meta">
+          <strong>{item.preview.title}</strong>
+          <span>{item.preview.subtitle}</span>
+          <span className="preview-detail">{item.preview.detail}</span>
+        </span>
+      </a>
+    );
+  }
+
+  if (item.preview?.provider === "opentable") {
+    return (
+      <a className="link-card link-card-opentable" href={url} target="_blank" rel="noreferrer">
+        <span className="opentable-preview" aria-hidden>
+          <span className="opentable-mark">O</span>
+          <span className="opentable-name">OpenTable</span>
+          <i className="table-dot dot-one" />
+          <i className="table-dot dot-two" />
+          <i className="table-dot dot-three" />
+        </span>
+        <span className="link-meta">
+          <strong>{item.preview.title}</strong>
+          <span>{item.preview.subtitle}</span>
+          <span className="preview-actions">
+            <span>{item.preview.detail}</span>
+            <b>Reserve</b>
+          </span>
+        </span>
+      </a>
+    );
+  }
 
   const kind = route?.[1] === "o" ? "Organizer dashboard" : route?.[1] === "i" ? "Your plan" : "Link";
   return (
@@ -111,7 +167,7 @@ function Reactions({ item }: { item: SimItem }) {
   );
 }
 
-export function Phone({ person, index, items, typing, fresh, onSend, onReact, scripted = false, scriptDraft = "", composing = false, showHandle = true }: PhoneProps) {
+export function Phone({ person, index, items, typing, fresh, onSend, onReact, scripted = false, scriptDraft = "", composing = false, showHandle = true, focus }: PhoneProps) {
   const [ownDraft, setOwnDraft] = useState("");
   const draft = scripted ? scriptDraft : ownDraft;
   const setDraft = setOwnDraft;
@@ -160,6 +216,12 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact, sc
       <div className="phone-label">
         <span className={`lamp ${lamp}`} aria-hidden />
         <span className="phone-name">{person.name}</span>
+        {focus && (
+          <>
+            <span className="phone-cares">cares about</span>
+            <span className="phone-focus">{focus}</span>
+          </>
+        )}
         {showHandle && <span className="phone-handle">sim:{person.id}</span>}
       </div>
 
@@ -170,7 +232,8 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact, sc
             <span className="island" />
             <span className="icons">
               <span className="signal" />
-              <span className="battery" />
+              <span className="network">5G</span>
+              <span className="battery">85</span>
             </span>
           </div>
 
@@ -204,10 +267,12 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact, sc
 
             {items.map((item, position) => {
               const next = items[position + 1];
-              const tail = next?.from !== item.from || (typing && item.from === "agent" && !next);
+              const tail = next?.from !== item.from || Boolean(next?.stamp) || (typing && item.from === "agent" && !next);
               const mine = item.from === "user";
               return (
-                <div key={item.id} className={`row ${mine ? "mine" : "theirs"} ${tail ? "tail" : ""} ${fresh.has(item.id) ? "fresh" : ""}`}>
+                <Fragment key={item.id}>
+                  {item.stamp && <p className="thread-stamp later">{item.stamp}</p>}
+                  <div className={`row ${mine ? "mine" : "theirs"} ${tail ? "tail" : ""} ${fresh.has(item.id) ? "fresh" : ""}`}>
                   <div className="bubble-wrap">
                     {pickerFor === item.id && (
                       <span className="picker" role="menu" aria-label="Tapback">
@@ -227,11 +292,11 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact, sc
                       </span>
                     )}
                     {item.kind === "link" && item.url ? (
-                      <LinkCard url={item.url} />
+                      <LinkCard item={item} />
                     ) : mine ? (
-                      <div className="bubble mine">{item.text}</div>
+                      <div className="bubble mine"><MessageText text={item.text} /></div>
                     ) : scripted ? (
-                      <div className={`bubble theirs ${item.effect ? "effect" : ""}`}>{item.text}</div>
+                      <div className={`bubble theirs ${item.effect ? "effect" : ""}`}><MessageText text={item.text} /></div>
                     ) : (
                       <button
                         type="button"
@@ -239,13 +304,14 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact, sc
                         aria-label={`Juno: ${item.text}. Tap to react.`}
                         onClick={() => setPickerFor(pickerFor === item.id ? undefined : item.id)}
                       >
-                        {item.text}
+                        <MessageText text={item.text} />
                       </button>
                     )}
                     <Reactions item={item} />
                   </div>
                   {mine && !next && <span className="receipt">Delivered</span>}
-                </div>
+                  </div>
+                </Fragment>
               );
             })}
 
@@ -261,22 +327,31 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact, sc
           </div>
 
           <form className="composer" onSubmit={submit}>
-            <span className="plus" aria-hidden>
-              +
-            </span>
+            <span className="plus" aria-hidden />
             <label className="field">
               <span className="sr-only">Message Juno as {person.name}</span>
               {scripted ? (
                 <div className={`mirror ${composing ? "on" : ""}`}>
-                  {draft ? <span className="typed">{draft}</span> : <span className="placeholder">iMessage</span>}
-                  {composing && <i className="caret" />}
+                  {draft ? (
+                    <span className="typed">
+                      {draft}
+                      {composing && <i className="caret" />}
+                    </span>
+                  ) : (
+                    <span className="placeholder">
+                      {composing && <i className="caret" />}
+                      iMessage
+                    </span>
+                  )}
                 </div>
               ) : (
                 <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="iMessage" autoComplete="off" />
               )}
             </label>
             <button type="submit" className="send" disabled={!draft.trim()} aria-label="Send">
-              ↑
+              <svg viewBox="0 0 12 13" aria-hidden>
+                <path d="M5.7 12V2.15M1.6 6.25 5.7 2.15l4.1 4.1" />
+              </svg>
             </button>
           </form>
         </div>

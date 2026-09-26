@@ -112,7 +112,7 @@ export function createApi(store: Store, opts: ApiOptions): Hono {
   // 网页模拟器（开发和 demo 备份用）；实时消息走 /sim/ws，在 src/index.ts 里处理
   app.get("/sim", (c) => c.html(renderPage(dist, { title: "Juno simulator" })));
   // 录屏页：纯前端剧本，不走 WebSocket
-  app.get("/demo", (c) => c.html(renderPage(dist, { title: "Juno", description: "Four private chats. One Saturday plan." })));
+  app.get("/demo", (c) => c.html(renderPage(dist, { title: "Juno" })));
   app.use("/assets/*", serveStatic({ root: dist }));
 
   return app;

@@ -287,6 +287,7 @@
   justify-content: space-between;
   height: 40px;
   padding: 4px 22px 0 28px;
+  background: rgba(247, 247, 247, 0.94);
   font-size: 14px;
   font-weight: 600;
 }
@@ -305,7 +306,7 @@
 .icons {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .signal {
@@ -318,20 +319,39 @@
     linear-gradient(#000, #000) 12px 100% / 3px 100% no-repeat;
 }
 
+.network {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.3px;
+}
+
 .battery {
   position: relative;
-  width: 22px;
-  height: 11px;
-  border: 1.5px solid rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 1.2px solid rgba(0, 0, 0, 0.45);
   border-radius: 3.5px;
+  background: #000;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.35px;
 }
 
 .battery::after {
   content: "";
   position: absolute;
-  inset: 1.5px 4px 1.5px 1.5px;
-  border-radius: 1.5px;
-  background: #000;
+  top: 3px;
+  right: -2.8px;
+  width: 1.8px;
+  height: 5px;
+  border-radius: 0 1.5px 1.5px 0;
+  background: rgba(0, 0, 0, 0.45);
 }
 
 .chat-header {
@@ -392,6 +412,10 @@
   line-height: 1.35;
   text-align: center;
   color: #8e8e93;
+}
+
+.thread-stamp.later {
+  margin: 16px 0 10px;
 }
 
 .thread-empty {
@@ -463,6 +487,27 @@
   text-align: left;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.bubble .line {
+  display: block;
+}
+
+.bubble .line.bullet {
+  padding-left: 1.15em;
+  text-indent: -1.15em;
+}
+
+.bubble .line.bullet + .line.bullet {
+  margin-top: 3px;
+}
+
+.bubble .line.gap {
+  height: 0.45em;
+}
+
+.bubble strong {
+  font-weight: 700;
 }
 
 .bubble.theirs {
@@ -667,6 +712,140 @@
   color: rgba(255, 255, 255, 0.92);
 }
 
+.map-preview,
+.opentable-preview {
+  position: relative;
+  display: block;
+  height: 96px;
+  overflow: hidden;
+}
+
+.map-preview {
+  background:
+    linear-gradient(28deg, transparent 44%, rgba(190, 218, 171, 0.85) 45% 61%, transparent 62%),
+    #e8e5dc;
+}
+
+.map-road {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  width: 145%;
+  height: 8px;
+  border: 1px solid rgba(202, 192, 174, 0.85);
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45);
+}
+
+.road-one {
+  top: 36px;
+  left: -38px;
+  transform: rotate(-17deg);
+}
+
+.road-two {
+  top: 42px;
+  left: -22px;
+  transform: rotate(28deg);
+}
+
+.map-water {
+  position: absolute;
+  right: -25px;
+  bottom: -48px;
+  width: 108px;
+  height: 130px;
+  border-radius: 52% 0 0;
+  background: #9fd6ef;
+  transform: rotate(-10deg);
+}
+
+.map-pin {
+  position: absolute;
+  z-index: 2;
+  top: 28px;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50% 50% 50% 0;
+  background: #ea4335;
+  box-shadow: 0 3px 7px rgba(95, 50, 40, 0.3);
+  transform: translateX(-50%) rotate(-45deg);
+}
+
+.map-pin::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.maps-badge {
+  position: absolute;
+  z-index: 3;
+  left: 8px;
+  bottom: 8px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+  font-size: 9px;
+  font-weight: 600;
+  color: #3c4043;
+}
+
+.opentable-preview {
+  background:
+    radial-gradient(circle at 85% 18%, rgba(255, 255, 255, 0.16), transparent 25%),
+    linear-gradient(135deg, #da3743, #b5122b);
+  color: #fff;
+}
+
+.opentable-mark {
+  position: absolute;
+  top: 17px;
+  left: 14px;
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.opentable-name {
+  position: absolute;
+  top: 25px;
+  left: 58px;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.table-dot {
+  position: absolute;
+  bottom: 14px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.dot-one {
+  right: 38px;
+}
+
+.dot-two {
+  right: 25px;
+}
+
+.dot-three {
+  right: 12px;
+}
+
 .link-meta {
   display: flex;
   flex-direction: column;
@@ -681,6 +860,7 @@
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.25;
@@ -689,6 +869,46 @@
 .link-meta span {
   font-size: 11.5px;
   color: #8e8e93;
+}
+
+.link-card-maps .link-meta strong,
+.link-card-opentable .link-meta strong {
+  min-height: 0;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  font-size: 14px;
+}
+
+.link-meta .preview-detail {
+  margin-top: 3px;
+  font-size: 10px;
+  color: #4285f4;
+}
+
+.link-meta .preview-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.link-meta .preview-actions span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.link-meta .preview-actions b {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #da3743;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 650;
 }
 
 /* 输入框 */
@@ -700,16 +920,29 @@
 }
 
 .plus {
-  display: grid;
-  place-items: center;
+  position: relative;
   flex: none;
   width: 30px;
   height: 30px;
   border-radius: 50%;
   background: #f2f2f7;
-  color: #8e8e93;
-  font-size: 22px;
-  line-height: 1;
+}
+
+.plus::before,
+.plus::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 13px;
+  height: 1.6px;
+  border-radius: 999px;
+  background: #8e8e93;
+  transform: translate(-50%, -50%);
+}
+
+.plus::after {
+  transform: translate(-50%, -50%) rotate(90deg);
 }
 
 .field {
@@ -734,11 +967,8 @@
   border-color: var(--me);
 }
 
-/* 录屏脚本用的假输入框：能逐字显示，并带闪烁光标 */
+/* 录屏脚本用的假输入框。光标必须留在文字的 inline 流里，不能另起一个 flex 项，否则换行后会掉到下一行。 */
 .mirror {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
   box-sizing: border-box;
   width: 100%;
   min-height: 36px;
@@ -760,15 +990,19 @@
 }
 
 .mirror .caret {
-  flex: none;
+  display: inline-block;
   width: 1.5px;
   height: 1.05em;
   margin-left: 1px;
+  vertical-align: -0.15em;
   background: var(--me);
   animation: caret 1s steps(2) infinite;
 }
 
 .send {
+  position: relative;
+  display: grid;
+  place-items: center;
   flex: none;
   width: 30px;
   height: 30px;
@@ -776,10 +1010,19 @@
   border-radius: 50%;
   background: var(--me);
   color: #fff;
-  font-size: 17px;
-  font-weight: 700;
   cursor: pointer;
   transition: opacity 0.15s;
+}
+
+.send svg {
+  width: 12px;
+  height: 13px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .send:disabled {

@@ -5,7 +5,9 @@
   --me: #007aff;
   --them: #e9e9eb;
   --screen: #ffffff;
-  --gap: 28px;
+  --gap: 42px;
+  --bezel: 6px;
+  --radius: calc(var(--w) * 0.155);
   --w: clamp(210px, calc((100vw - 96px - 3 * var(--gap)) / 4), 292px);
   --h: min(640px, calc(100vh - 188px));
 
@@ -31,17 +33,14 @@
   text-align: center;
 }
 
-.demo-kicker {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6e6e73;
+.demo-top h1,
+.demo-top p,
+.demo .phone {
+  opacity: 0;
 }
 
 .demo-top h1 {
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 34px;
   font-weight: 600;
   letter-spacing: -0.035em;
@@ -50,10 +49,23 @@
 
 .demo-top p:last-child {
   margin: 6px auto 0;
-  max-width: 560px;
+  max-width: 720px;
   font-size: 15px;
   line-height: 1.35;
   color: #6e6e73;
+}
+
+.demo.shown h1 {
+  animation: demo-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.demo.shown .phone {
+  animation: demo-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(320ms + var(--i) * 90ms);
+}
+
+.demo.shown .demo-top p {
+  animation: demo-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards;
 }
 
 .demo-phones {
@@ -76,6 +88,7 @@
 
 .demo .phone-label {
   height: 28px;
+  gap: 6px;
   margin: 0 0 8px 6px;
 }
 
@@ -87,40 +100,66 @@
   color: #1d1d1f;
 }
 
-.demo .lamp {
+.demo .phone-cares,
+.demo .phone-focus {
+  opacity: 0;
+}
+
+.demo.shown .phone-cares,
+.demo.shown .phone-focus {
+  animation: demo-emphasis 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(1.15s + var(--i) * 80ms);
+}
+
+.demo .phone-cares {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #6e6e73;
+  white-space: nowrap;
+}
+
+.demo .phone-focus {
+  margin-left: 0;
+  padding: 3px 7px;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: rgba(0, 122, 255, 0.1);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #0066cc;
+}
+
+.demo .lamp,
+.demo .lamp.typing,
+.demo .lamp.flash {
   background: #d2d2d7;
   box-shadow:
     0 0 0 3px #f5f5f7,
     0 0 0 4px rgba(0, 0, 0, 0.06);
-}
-
-.demo .lamp.typing {
-  background: var(--me);
-  box-shadow:
-    0 0 0 3px #f5f5f7,
-    0 0 0 4px rgba(0, 122, 255, 0.35),
-    0 0 16px 3px rgba(0, 122, 255, 0.28);
-  animation: demo-pulse 1.1s ease-in-out infinite;
-}
-
-.demo .lamp.flash {
-  background: #fff;
-  box-shadow:
-    0 0 0 3px #f5f5f7,
-    0 0 18px 4px rgba(0, 122, 255, 0.35);
+  animation: none;
 }
 
 .demo .device {
+  padding: var(--bezel);
+  border-radius: var(--radius);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.4),
     0 22px 50px -24px rgba(0, 0, 0, 0.38);
 }
 
+.demo .screen {
+  border-radius: calc(var(--radius) - var(--bezel));
+}
+
+.demo .island {
+  width: 26%;
+}
+
 .demo .phone:has(.lamp.typing) .device {
   box-shadow:
-    inset 0 0 0 1px rgba(0, 122, 255, 0.2),
-    0 22px 50px -24px rgba(0, 0, 0, 0.38),
-    0 0 36px -8px rgba(0, 122, 255, 0.32);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 22px 50px -24px rgba(0, 0, 0, 0.38);
 }
 
 .demo .bubble.theirs {
@@ -137,45 +176,17 @@
   pointer-events: none;
 }
 
-.demo-cue.idle {
-  inset: 0;
-  justify-content: center;
-}
-
 .demo-cue.complete {
   top: 28px;
   right: 36px;
 }
 
-.demo-play,
 .demo-replay {
   pointer-events: auto;
   border: 0;
   color: #fff;
   background: #1d1d1f;
   cursor: pointer;
-}
-
-.demo-play {
-  display: grid;
-  place-items: center;
-  width: 86px;
-  height: 86px;
-  border-radius: 50%;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
-}
-
-.demo-play svg {
-  margin-left: 3px;
-}
-
-.demo-hint {
-  margin: 0;
-  font-size: 13px;
-  color: #6e6e73;
-}
-
-.demo-replay {
   padding: 12px 22px;
   border-radius: 999px;
   font: inherit;
@@ -185,23 +196,45 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
 }
 
-.demo-play:focus-visible,
 .demo-replay:focus-visible {
   outline: 2px solid var(--me);
   outline-offset: 3px;
 }
 
-@keyframes demo-pulse {
-  50% {
-    box-shadow:
-      0 0 0 3px #f5f5f7,
-      0 0 0 5px rgba(0, 122, 255, 0.22),
-      0 0 22px 6px rgba(0, 122, 255, 0.2);
+@keyframes demo-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes demo-emphasis {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .demo .lamp.typing {
     animation: none;
+  }
+
+  .demo.shown h1,
+  .demo.shown .phone,
+  .demo.shown .demo-top p,
+  .demo.shown .phone-cares,
+  .demo.shown .phone-focus {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }

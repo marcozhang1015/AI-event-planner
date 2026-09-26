@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { SimItem } from "@shared/sim";
 import { DEMO_CUES, DEMO_DURATION_MS, DEMO_PEOPLE, type DemoCue } from "./demoScript";
 
-export type DemoPhase = "idle" | "playing" | "complete";
+export type DemoPhase = "idle" | "intro" | "playing" | "complete";
+
+/** 标题、手机、说明入场之后，才开始播消息。 */
+const INTRO_MS = 1700;
 
 interface Visual {
   threads: Record<string, SimItem[]>;
@@ -41,9 +44,12 @@ function apply(visual: Visual, cue: DemoCue): Visual {
   if (cue.type === "draft") return { ...visual, drafts: { ...visual.drafts, [person]: cue.text ?? "" } };
   const item: SimItem = {
     id: `demo-${person}-${visual.seq}`,
-    from: cue.type === "agent" ? "agent" : "user",
-    kind: "text",
+    from: cue.type === "agent" || cue.type === "link" ? "agent" : "user",
+    kind: cue.type === "link" ? "link" : "text",
     text: cue.text ?? "",
+    url: cue.url,
+    preview: cue.preview,
+    stamp: cue.stamp,
     at: new Date(Date.UTC(2026, 8, 26, 14, 41, 0) + cue.at).toISOString(),
     reactions: [],
   };
@@ -69,17 +75,25 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-/** 点击后按剧本播放；Replay 会清空并从头再来。计时器在卸载或重播时全部取消。 */
+/** 点击后先入场，再按剧本播放；Replay 会清空并从头再来。计时器在卸载或重播时全部取消。 */
 export function useDemoPlayback() {
   const [state, dispatch] = useReducer(reducer, { phase: "idle", visual: blank() });
   const [run, setRun] = useReducer((value: number) => value + 1, 0);
   const lock = useRef(false);
 
   useEffect(() => {
-    if (state.phase !== "playing") {
-      lock.current = false;
-      return;
-    }
+    if (state.phase === "idle" || state.phase === "complete") lock.current = false;
+  }, [state.phase]);
+
+  useEffect(() => {
+    if (state.phase !== "intro") return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = setTimeout(() => dispatch({ type: "phase", phase: "playing" }), reduced ? 0 : INTRO_MS);
+    return () => clearTimeout(timer);
+  }, [state.phase, run]);
+
+  useEffect(() => {
+    if (state.phase !== "playing") return;
     let cursor = 0;
     let frame = 0;
     let closed = false;
@@ -112,7 +126,7 @@ export function useDemoPlayback() {
     if (lock.current) return;
     lock.current = true;
     dispatch({ type: "reset" });
-    dispatch({ type: "phase", phase: "playing" });
+    dispatch({ type: "phase", phase: "intro" });
     setRun();
   }, []);
 
@@ -128,5 +142,5 @@ export function useDemoPlayback() {
 
   const fresh = useMemo(() => new Set(Object.values(state.visual.threads).flat().map((item) => item.id)), [state.visual.threads]);
 
-  return { phase: state.phase, ...state.visual, fresh, play, replay };
+  return { phase: state.phase, run, ...state.visual, fresh, play, replay };
 }

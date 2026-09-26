@@ -13,14 +13,24 @@ export interface SimReaction {
   emoji: string;
 }
 
+export interface SimLinkPreview {
+  provider: "google-maps" | "opentable";
+  title: string;
+  subtitle: string;
+  detail?: string;
+}
+
 export interface SimItem {
   id: string;
   from: SimFrom;
   kind: "text" | "link";
   text: string;
   url?: string;
+  preview?: SimLinkPreview;
   /** iMessage 的全屏特效；模拟器里放 confetti。 */
   effect?: "confetti";
+  /** 录屏用：这条前面插一行时间，表示和上一条隔了一段。 */
+  stamp?: string;
   at: string;
   reactions: SimReaction[];
 }
