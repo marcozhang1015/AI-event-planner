@@ -4,7 +4,14 @@
     {
       "name": "juno",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["PROVIDERS=sim", "LLM=off", "DEBOUNCE_MS=800", "bun", "src/index.ts"],
+      "runtimeArgs": [
+        "PROVIDERS=sim",
+        "LLM=off",
+        "DEBOUNCE_MS=800",
+        "QUIET_HOURS=off",
+        "bun",
+        "src/index.ts"
+      ],
       "port": 3000
     }
   ]

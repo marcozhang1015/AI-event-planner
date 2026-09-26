@@ -1,7 +1,7 @@
 // 一部模拟的 iPhone：一个人和 Juno 的私聊。手机里面尽量还原 iMessage 浅色界面。
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import type { SimItem, SimPerson } from "../../../src/sim/protocol";
+import type { SimItem, SimPerson } from "@shared/sim";
 
 const TAPBACKS = ["👍", "❤️", "😂", "‼️", "❓"];
 const CONFETTI_COLORS = ["#ff5a5f", "#ffb23f", "#3ddc84", "#0a84ff", "#bf5af2", "#ffd60a"];

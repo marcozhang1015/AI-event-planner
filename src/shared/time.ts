@@ -1,4 +1,6 @@
-import type { LocalTime, TimeWindow } from "../types";
+// 时刻、日期、时区和格式化。活动里的时间一律是活动时区的本地时刻 "HH:MM"，只在生成日历、判断夜间免打扰时换算成 UTC。
+
+import type { LocalTime, TimeWindow } from "./types";
 
 export const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 
@@ -79,4 +81,40 @@ export function zonedToUtc(day: string, time: LocalTime, timeZone: string): Date
   const [hours = 0, minutes = 0] = time.split(":").map(Number);
   const guess = Date.UTC(year, month - 1, date, hours, minutes);
   return new Date(guess - tzOffsetMinutes(new Date(guess), timeZone) * 60000);
+}
+
+/** 某个时区里此刻的本地时刻 "HH:MM"。 */
+export function localTimeIn(timeZone: string, now: Date): LocalTime {
+  return new Intl.DateTimeFormat("en-GB", { timeZone, hourCycle: "h23", hour: "2-digit", minute: "2-digit" }).format(now);
+}
+
+/** 夜间免打扰时段（活动时区的本地时刻），可以跨午夜。 */
+export interface QuietHours {
+  start: LocalTime;
+  end: LocalTime;
+}
+
+/** "22-8" / "22:00-08:00" → 时段；"off" 或空 → undefined。写错了直接报错，免得悄悄失效。 */
+export function parseQuietHours(value: string | undefined): QuietHours | undefined {
+  const text = value?.trim().toLowerCase();
+  if (!text || text === "off") return undefined;
+  const match = text.match(/^(\d{1,2})(?::(\d{2}))?\s*-\s*(\d{1,2})(?::(\d{2}))?$/);
+  const [, h1, m1 = "0", h2, m2 = "0"] = match ?? [];
+  if (!h1 || !h2 || Number(h1) > 23 || Number(h2) > 23 || Number(m1) > 59 || Number(m2) > 59) {
+    throw new Error(`QUIET_HOURS="${value}" 无效，写成 22-8 或 off`);
+  }
+  return { start: fromMinutes(Number(h1) * 60 + Number(m1)), end: fromMinutes(Number(h2) * 60 + Number(m2)) };
+}
+
+/** now 落在免打扰时段里，就返回时段结束的那一刻；否则 undefined。 */
+export function quietUntil(now: Date, timeZone: string, quiet: QuietHours | undefined): Date | undefined {
+  if (!quiet) return undefined;
+  const minutes = toMinutes(localTimeIn(timeZone, now));
+  const start = toMinutes(quiet.start);
+  const end = toMinutes(quiet.end);
+  const overnight = start > end;
+  const inside = overnight ? minutes >= start || minutes < end : minutes >= start && minutes < end;
+  if (!inside) return undefined;
+  const today = todayIn(timeZone, now);
+  return zonedToUtc(overnight && minutes >= start ? addDays(today, 1) : today, quiet.end, timeZone);
 }

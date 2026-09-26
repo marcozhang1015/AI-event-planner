@@ -1,8 +1,8 @@
 // 跨活动记忆（hackathon-plan.md §6 有余力第 1 项）。
 // 规则：只记本人确认过的、不随活动变化的偏好；下次先预填成"待确认"，本人确认后才用；只在本人私聊里用；"forget me" 就删。
 
-import { distanceKm } from "../maps/geo";
-import type { Answer, AnswerPatch, Area, Member, Person, Place } from "../types";
+import { distanceKm } from "./geo";
+import type { Answer, AnswerPatch, Area, Member, Person, Place } from "../shared/types";
 
 export function hasProfile(person: Person | undefined): person is Person {
   return Boolean(person && (person.allergies || person.diet || person.drives));

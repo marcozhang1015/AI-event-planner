@@ -1,10 +1,10 @@
 // 跨活动记忆：只记确认过的；下次只当提议，本人确认才用；只在本人私聊里用；"forget me" 就删。
 
 import { describe, expect, test } from "bun:test";
-import { organizerView } from "../src/core/privacy";
-import { prefill } from "../src/flows/memory";
-import type { Answer, Person, Place } from "../src/types";
-import { ALEX, Harness, SAM, textsTo } from "./harness";
+import { organizerView } from "../src/out/privacy";
+import { prefill } from "../src/core/memory";
+import type { Answer, Person, Place } from "../src/shared/types";
+import { ALEX, Harness, SAM, textsTo, VIEWS } from "./harness";
 
 /** 第一次活动：Sam 答完四个问题、确认、留邮箱。 */
 async function firstEvent(h: Harness) {
@@ -13,6 +13,7 @@ async function firstEvent(h: Harness) {
   await h.send(ALEX, "yes");
   await h.send(ALEX, "sam");
   for (const text of ["sure", "after 3", "peanuts", "need a ride, I'm near the library", "yeah", "yep", "sam@example.com"]) await h.send(SAM, text);
+  await h.send(ALEX, "nope"); // 组织者只组织，不参加
 }
 
 /** 之后的另一场活动：Alex 又发起、又邀请 Sam。返回 Sam 收到的开场白。 */
@@ -94,7 +95,7 @@ describe("跨活动记忆", () => {
     const h = new Harness();
     await firstEvent(h);
     await secondEvent(h);
-    const view = organizerView(h.store, h.store.listEvents()[1]!);
+    const view = organizerView(h.reader(), h.store.listEvents()[1]!, VIEWS);
     expect(view.aggregates.allergies).toEqual([]);
     expect(view.members.find((member) => member.name === "Sam")?.status).toBe("invited");
   });
@@ -106,7 +107,7 @@ describe("跨活动记忆", () => {
     expect(h.store.getPerson(SAM)).toBeUndefined();
     expect(h.store.getAnswer(h.store.listEvents()[0]!.id, SAM)?.confirmed).toBe(true); // 这次活动不受影响
 
-    expect(await secondEvent(h)).toEndWith("Got a sec for 4 quick questions?");
+    expect(await secondEvent(h)).toEndWith("Got a sec for a few quick questions?");
   });
 
   test("记住的集合点离新活动太远（换了城市）就不预填", () => {

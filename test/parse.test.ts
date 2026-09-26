@@ -1,15 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import {
+  hasChangeCue,
+  isDecline,
+  isDeferral,
+  isInviteRequest,
+  isPlanRequest,
+  isQuestion,
   isSkip,
-  normalizePhone,
+  parseApproval,
+  parseChoice,
   parseDay,
   parseDrives,
   parseEmail,
   parseHomeBy,
+  parseJoining,
   parseList,
   parseMoneyCents,
   parseSeats,
   parseTimeWindow,
+  parseVerification,
   parseYesNo,
 } from "../src/brain/parse";
 
@@ -25,6 +34,7 @@ describe("规则解析", () => {
     expect(parseTimeWindow("anytime")).toEqual({});
     expect(parseTimeWindow("3点以后")).toEqual({ start: "15:00" });
     expect(parseTimeWindow("no idea")).toBeUndefined();
+    expect(parseTimeWindow("can we start at 4?")).toEqual({ start: "16:00" });
   });
 
   test("最晚到家", () => {
@@ -64,20 +74,76 @@ describe("规则解析", () => {
     expect(parseDrives("need a ride, I'm near the library")).toBe("no");
     expect(parseDrives("I can drive")).toBe("yes");
     expect(parseDrives("I have a car but prefer not to drive")).toBe("if_needed");
+    expect(parseDrives("I'm in too and can drive 2")).toBe("yes");
+    expect(parseDrives("ugh my car's in the shop, can't drive tomorrow")).toBe("no");
+    expect(parseSeats("I'm in too and can drive 2")).toBe(2);
     expect(parseSeats("I can take 3")).toBe(3);
     expect(parseSeats("2 seats")).toBe(2);
   });
 
-  test("过敏：没有 → []；有 → 拆开，去掉程度词", () => {
+  test("过敏：没有 → []；有 → 拆开，程度词换成 (severe) 标记", () => {
     expect(parseList("none")).toEqual([]);
     expect(parseList("nope, I eat everything")).toEqual([]);
-    expect(parseList("peanuts, pretty severe")).toEqual(["peanuts"]);
+    expect(parseList("peanuts, pretty severe")).toEqual(["peanuts (severe)"]);
     expect(parseList("shellfish and gluten")).toEqual(["shellfish", "gluten"]);
   });
 
-  test("邮箱和号码", () => {
+  test("邮箱", () => {
     expect(parseEmail("it's Sam.Lee@Example.com thanks")).toBe("sam.lee@example.com");
-    expect(normalizePhone("(314) 555-0101")).toBe("+13145550101");
-    expect(normalizePhone("+44 20 7946 0000")).toBe("+442079460000");
+  });
+
+  test("明确说不来才算谢绝", () => {
+    expect(isDecline("no")).toBe(true);
+    expect(isDecline("I can't make it anymore")).toBe(true);
+    expect(isDecline("no, I'll find my own ride")).toBe(false);
+    expect(isDecline("yes please")).toBe(false);
+  });
+
+  test("晚点再说、提问", () => {
+    for (const text of ["not now", "later", "busy right now", "in a meeting", "nope"]) expect(isDeferral(text)).toBe(true);
+    expect(isDeferral("sure")).toBe(false);
+    expect(isDeferral("I'm free later in the day")).toBe(false);
+    expect(isQuestion("where are we going for dinner?")).toBe(true);
+    expect(isQuestion("what time again")).toBe(true);
+    expect(isQuestion("thanks!")).toBe(false);
+  });
+});
+
+describe("组织者的命令", () => {
+  test("approve 只认明确的文字", () => {
+    expect(parseApproval("approve A")).toEqual({ label: "A" });
+    expect(parseApproval("ok, approve plan b")).toEqual({ label: "B" });
+    expect(parseApproval("approve")).toEqual({ label: undefined });
+    expect(parseApproval("批准 A")).toEqual({ label: "A" });
+    expect(parseApproval("I approve of the idea but let's wait")).toBeUndefined();
+    expect(parseApproval("approved?")).toBeUndefined();
+    expect(parseApproval("looks good")).toBeUndefined();
+  });
+
+  test("核实：打过电话 + 能 / 不能", () => {
+    expect(parseVerification("just called, they said they can do it")).toBe(true);
+    expect(parseVerification("checked with them — they can't guarantee it")).toBe(false);
+    expect(parseVerification("called, not safe for nuts")).toBe(false);
+    expect(parseVerification("they can do it")).toBeUndefined();
+  });
+
+  test("plan it、邀请、改设置、自己去不去", () => {
+    expect(isPlanRequest("ok plan it")).toBe(true);
+    expect(isPlanRequest("go ahead")).toBe(true);
+    expect(isInviteRequest("also invite bob")).toBe(true);
+    expect(isInviteRequest("has sam answered yet?")).toBe(false);
+    expect(hasChangeCue("can we start at 4?")).toBe(true);
+    expect(hasChangeCue("none")).toBe(false);
+    expect(parseJoining("sam, priya. I'm in too and can drive 2")).toBe(true);
+    expect(parseJoining("count me out, just organizing")).toBe(false);
+    expect(parseJoining("sam and priya")).toBeUndefined();
+  });
+
+  test("回编号选候选", () => {
+    expect(parseChoice("2", 3)).toBe(2);
+    expect(parseChoice("#1", 3)).toBe(1);
+    expect(parseChoice("the second one", 3)).toBe(2);
+    expect(parseChoice("4", 3)).toBeUndefined();
+    expect(parseChoice("north station", 3)).toBeUndefined();
   });
 });

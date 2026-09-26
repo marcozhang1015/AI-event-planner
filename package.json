@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/index.ts",
-    "demo": "vite build --config web/vite.config.ts && bun src/index.ts",
+    "demo": "bun run web:build && bun run start",
     "start": "bun src/index.ts",
     "web:dev": "vite --config web/vite.config.ts",
     "web:build": "vite build --config web/vite.config.ts",

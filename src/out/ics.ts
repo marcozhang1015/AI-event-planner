@@ -1,7 +1,61 @@
 // 日历邀请（§5.7）。每人每个活动用固定 UID，更新时 SEQUENCE+1，日历里的原事件会被直接更新。
 
-import { zonedToUtc } from "../core/time";
-import type { LocalTime } from "../types";
+import { createHash } from "node:crypto";
+import { zonedToUtc } from "../shared/time";
+import type { Event, Handle, LocalTime, Member } from "../shared/types";
+import type { ItineraryView } from "../shared/views";
+import { itineraryLines } from "./imessage";
+import { memberUrl } from "./privacy";
+
+/** 每人每场活动固定的 UID。handle 取哈希，不把号码写进日历数据。 */
+export function calendarUid(eventId: string, handle: Handle): string {
+  return `${eventId}-${createHash("sha256").update(handle).digest("hex").slice(0, 12)}@juno`;
+}
+
+/** 日历里的 ORGANIZER 是 agent 自己；URL 是本人的网页。 */
+export interface CalendarSite {
+  baseUrl: string;
+  agentName: string;
+  /** "Juno <juno@example.com>" */
+  emailFrom: string;
+}
+
+export interface MemberCalendar {
+  event: Event;
+  member: Member;
+  itinerary: ItineraryView;
+  /** 邮件里的邀请用 REQUEST（带上收件人）；行程页下载用 PUBLISH。 */
+  method: CalendarEvent["method"];
+  /** 活动那天，YYYY-MM-DD。 */
+  day: string;
+}
+
+/** 一个人这场活动的日历：从被接（或出发）到送到家。邮件邀请和行程页下载用同一个 UID，SEQUENCE = 发布次数 − 1。 */
+export function memberCalendar(site: CalendarSite, { event, member, itinerary: it, method, day }: MemberCalendar, now = new Date()): string {
+  return buildIcs(
+    {
+      uid: calendarUid(event.id, member.handle),
+      sequence: Math.max(0, (event.publications ?? 1) - 1),
+      method,
+      day,
+      start: it.pickup.at,
+      end: it.dropoff.at,
+      timezone: event.timezone,
+      summary: event.title,
+      location: it.activity.venue.name,
+      description: itineraryLines(it).join("\n"),
+      url: memberUrl(site.baseUrl, member),
+      organizer: { name: site.agentName, email: emailAddress(site.emailFrom) },
+      attendee: member.email ? { name: member.name, email: member.email } : undefined,
+    },
+    now,
+  );
+}
+
+/** "Juno <juno@example.com>" → "juno@example.com"。 */
+function emailAddress(from: string): string {
+  return from.match(/<([^>]+)>/)?.[1] ?? from.trim();
+}
 
 export interface CalendarEvent {
   uid: string;

@@ -1,3 +1,8 @@
+// 地理：活动区域的默认半径、两点间的距离。
+
+/** 活动区域的默认半径（公里）。地图缓存按查询参数存，运行时和 fetch-maps 脚本必须用同一个值才能命中。 */
+export const AREA_RADIUS_KM = 15;
+
 export interface LatLng {
   lat: number;
   lng: number;

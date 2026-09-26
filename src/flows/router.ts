@@ -1,7 +1,8 @@
+import { isForgetMe } from "../core/memory";
+import { say, type Outbound } from "../out/actions";
 import { templates as t } from "../out/imessage";
 import { attendeeTurn } from "./attendee";
-import { say, textOf, type FlowDeps, type Outbound, type Turn } from "./context";
-import { isForgetMe } from "./memory";
+import { textOf, type FlowDeps, type Turn } from "./context";
 import { organizerTurn } from "./organizer";
 
 /** 一轮对话的入口：按这个人的会话决定走组织者还是参与者流程。陌生人按"想发起活动"处理。 */

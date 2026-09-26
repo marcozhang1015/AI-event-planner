@@ -1,8 +1,8 @@
-// Google Maps Platform：Places API (New) Text Search + Routes API computeRouteMatrix。
+// Google Maps Platform：Places API (New) Text Search、Routes API computeRouteMatrix、Maps Static API。
 // 价格、营业时间、电话属于 Places 的 Enterprise 字段，计费更高；只在搜候选地点时请求。
 
-import type { Area, Place, TravelTime, Venue } from "../types";
-import type { Maps, VenueHit } from "./types";
+import type { Area, Candidate, Place, TravelTime, Venue } from "../shared/types";
+import type { Maps } from "./types";
 
 const SEARCH_TEXT_URL = "https://places.googleapis.com/v1/places:searchText";
 const ROUTE_MATRIX_URL = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix";
@@ -95,7 +95,7 @@ export class GoogleMaps implements Maps {
     return places.flatMap((place) => toPlace(place) ?? []);
   }
 
-  async searchVenues(query: string, kind: Venue["kind"], near: Area): Promise<VenueHit[]> {
+  async searchVenues(query: string, kind: Venue["kind"], near: Area): Promise<Candidate[]> {
     const places = await this.searchText(query, near, VENUE_FIELDS, 10);
     const fetchedAt = this.now().toISOString();
     return places.flatMap((raw) => {
@@ -150,4 +150,32 @@ export class GoogleMaps implements Maps {
       return [{ fromPlaceId: from.id, toPlaceId: to.id, minutes: Math.ceil(seconds / 60), fetchedAt }];
     });
   }
+}
+
+// Static Maps 的图片地址：只在服务端带着 key 生成，由 /map/:token.png 代理给网页和邮件，key 不出服务端。
+
+export interface MapMarker {
+  lat: number;
+  lng: number;
+  kind: "pickup" | "activity" | "restaurant";
+}
+
+export type MapPath = { lat: number; lng: number }[];
+
+const COLORS: Record<MapMarker["kind"], string> = { pickup: "0x0a84ff", activity: "0x34c759", restaurant: "0xff9f0a" };
+
+function point(p: { lat: number; lng: number }): string {
+  return `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+}
+
+export function staticMapUrl(key: string, markers: MapMarker[], paths: MapPath[] = [], size = "640x400"): string {
+  const params = new URLSearchParams({ size, scale: "2", key });
+  for (const kind of ["pickup", "activity", "restaurant"] as const) {
+    const points = markers.filter((marker) => marker.kind === kind);
+    if (points.length) params.append("markers", [`color:${COLORS[kind]}`, "size:mid", ...points.map(point)].join("|"));
+  }
+  for (const path of paths) {
+    if (path.length > 1) params.append("path", ["color:0x0a84ffcc", "weight:4", ...path.map(point)].join("|"));
+  }
+  return `https://maps.googleapis.com/maps/api/staticmap?${params}`;
 }

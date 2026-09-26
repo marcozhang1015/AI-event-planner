@@ -1,0 +1,1343 @@
+/* 看板和个人行程页。和 /sim 分开打包，只随这些页面加载（模拟器的样式在 web/src/sim/simulator.css）。
+   纸面感的浅色主题，跟随系统切换深色。标题和正文用 Instrument Serif，时刻、标签用等宽的 Martian Mono，
+   只有一个强调色（朱红）。颜色从不单独表达信息：状态都有文字，标记都有形状。 */
+
+/* ───────── 颜色、字号 ───────── */
+
+:root:has(.juno) {
+  --paper: #f6f2ea;
+  --surface: #fffcf6;
+  --ink: #17150f;
+  --muted: #5c564a;
+  --rule: #d6cebd;
+  --accent: #b93b12;
+  --accent-soft: #f8e6dc;
+  --on-accent: #fffaf3;
+  --route-3: #7a7466;
+  --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* 手机上 16px，投影（1920 宽）上 20px：整页按 rem 一起放大 */
+  font-size: clamp(16px, 0.45vw + 11.5px, 20px);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* 看板还要看高度：投影一屏放得下，矮屏幕上字小一点 */
+:root:has(.dash) {
+  font-size: clamp(16px, min(0.45vw + 11.5px, 1.8vh), 20px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:has(.juno) {
+    --paper: #12110e;
+    --surface: #1b1915;
+    --ink: #f4efe6;
+    --muted: #b3ac9d;
+    --rule: #3a362d;
+    --accent: #ff8657;
+    --accent-soft: #34201a;
+    --on-accent: #1a0d06;
+    --route-3: #9a9384;
+  }
+}
+
+.juno {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: clamp(1.25rem, 3vw, 2.75rem) clamp(1.1rem, 3.5vw, 3.25rem) clamp(1.5rem, 3vw, 2.5rem);
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  line-height: 1.3;
+  /* Instrument Serif 只有常规体和斜体：不让浏览器假造粗体 */
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+:where(.juno) *,
+:where(.juno) *::before,
+:where(.juno) *::after {
+  box-sizing: border-box;
+}
+
+/* 重置写在 :where 里（零优先级），组件自己的类随时能覆盖 */
+:where(.juno) :is(h1, h2, h3, h4, p, ul, ol, dl, dd, figure) {
+  margin: 0;
+}
+
+:where(.juno) :is(h1, h2, h3, h4) {
+  font-weight: 400;
+}
+
+:where(.juno) :is(ul, ol) {
+  padding: 0;
+  list-style: none;
+}
+
+:where(.juno) a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.juno :is(a, button):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.juno code {
+  padding: 0.12em 0.45em;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.8em;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.juno .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.icon {
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 等宽小标签：栏目名、字段名、状态 */
+.label,
+.kicker,
+.facts dt,
+.stats dt,
+.changes-who dt {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* 栏目标题：标签后面跟一条细线 */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 1.1rem;
+  color: var(--ink);
+}
+
+.section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+/* ───────── 报头 ───────── */
+
+.masthead {
+  margin-bottom: clamp(1.5rem, 2.2vw, 1.75rem);
+  padding-bottom: clamp(0.9rem, 1.6vw, 1.3rem);
+  border-bottom: 2px solid var(--ink);
+}
+
+.masthead-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: clamp(0.6rem, 1.2vw, 1rem);
+}
+
+.masthead-title {
+  font-size: clamp(2.5rem, 4.4vw, 4.4rem);
+  line-height: 0.95;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.masthead-meta {
+  margin-top: 0.75rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.live-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: juno-breathe 2.4s ease-in-out infinite;
+}
+
+.live-off {
+  color: var(--muted);
+}
+
+.live-off .live-dot {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  animation: none;
+}
+
+/* ───────── 看板布局：手机一栏；中等宽度两栏（名单和地图 | 方案）；投影三栏（名单 | 方案 | 地图） ───────── */
+
+.dash-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(2.25rem, 3vw, 3rem);
+}
+
+.dash-plan {
+  container-type: inline-size;
+}
+
+@media (min-width: 60em) {
+  /* 方案跨两行；第二行是 1fr，方案再长也只撑第二行，名单和地图之间不会空出一截 */
+  .dash-main {
+    grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 1.6fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "people plan" "map plan";
+  }
+  .dash-people {
+    grid-area: people;
+  }
+  .dash-plan {
+    grid-area: plan;
+  }
+  .dash-map {
+    grid-area: map;
+  }
+}
+
+@media (min-width: 87.5em) {
+  .dash-main {
+    grid-template-columns: minmax(15rem, 0.62fr) minmax(0, 1.75fr) minmax(0, 0.85fr);
+    grid-template-rows: auto;
+    grid-template-areas: "people plan map";
+  }
+  .dash {
+    padding-top: 2rem;
+  }
+  /* 报头一行放下：标题在左，时间地点在右 */
+  .dash .masthead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    column-gap: 3rem;
+  }
+  .dash .masthead-top {
+    grid-column: 1 / -1;
+  }
+  .dash .masthead-meta {
+    margin: 0 0 0.45rem;
+    text-align: right;
+  }
+  /* 投影上地图占满一栏的高度（给页脚留出一行） */
+  .dash-map .map-canvas,
+  .dash-map .map-empty {
+    aspect-ratio: auto;
+    height: clamp(22rem, 58vh, 44rem);
+  }
+}
+
+/* ───────── 进度和名单 ───────── */
+
+.progress {
+  margin-bottom: 1.4rem;
+}
+
+.progress-count {
+  font-size: 1.3rem;
+}
+
+.progress-big {
+  font-size: 3.2rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.progress-waiting {
+  color: var(--muted);
+}
+
+.progress-bar {
+  display: flex;
+  gap: 4px;
+  height: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.seg {
+  flex: 1;
+  border-radius: 2px;
+}
+
+.seg-done {
+  background: var(--accent);
+}
+
+.seg-open {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.seg-out {
+  background: repeating-linear-gradient(135deg, var(--muted) 0 1.5px, transparent 1.5px 5px);
+  opacity: 0.55;
+}
+
+.members {
+  border-top: 1px solid var(--rule);
+}
+
+.member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.2rem 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.member-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+.member-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1rem;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  line-height: 1.6;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.tag {
+  padding: 0.3em 0.6em;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  font-family: var(--mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.45em 0.8em;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: juno-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+/* 圆点的形状也表达状态：空心、半满、实心、带斜线 */
+.chip-dot {
+  width: 0.75em;
+  height: 0.75em;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.chip-invited,
+.chip-declined {
+  color: var(--muted);
+}
+
+.chip-collecting .chip-dot {
+  background: linear-gradient(90deg, currentColor 50%, transparent 50%);
+}
+
+.chip-confirmed {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  color: var(--ink);
+}
+
+.chip-confirmed .chip-dot {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.chip-declined .chip-dot {
+  background: linear-gradient(135deg, transparent 42%, currentColor 42% 58%, transparent 58%);
+}
+
+.delivery {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+
+.delivery-sent {
+  color: var(--ink);
+}
+
+.delivery-failed {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.your-day {
+  margin-top: 2.25rem;
+}
+
+/* 方案栏够宽时，组织者自己的时间线在左，费用和日历在右 */
+@container (min-width: 700px) {
+  .itinerary-compact {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    align-items: start;
+    column-gap: 3rem;
+  }
+  .itinerary-compact .updated {
+    grid-column: 1 / -1;
+  }
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 1rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ───────── 方案 ───────── */
+
+.plan {
+  animation: juno-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.plan-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  margin-bottom: 1.1rem;
+}
+
+.plan-head .section-label {
+  flex: 1 1 8rem;
+  margin: 0;
+}
+
+.plan-head .badge {
+  animation: juno-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+.version {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.5em 0.8em;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge-attention {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  color: var(--accent);
+}
+
+.badge-done {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  color: var(--ink);
+}
+
+.options {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@container (min-width: 700px) {
+  .options:has(> :nth-child(2)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* 只有一个选项（比如已经发布）时，时间线和车组左右并排 */
+  .options:not(:has(> :nth-child(2))) .option-body {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+}
+
+.option {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: clamp(1rem, 1.4vw, 1.25rem);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--rule);
+}
+
+.option-head {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.option-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.9rem;
+}
+
+.option-title {
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.option-title span {
+  color: var(--muted);
+}
+
+.option-cost {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.option-body {
+  display: grid;
+  align-items: start;
+  gap: 1.4rem;
+}
+
+.callout {
+  padding: 0.8rem 1rem 0.9rem;
+  border-left: 4px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--accent-soft);
+}
+
+.callout-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  margin-bottom: 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.callout li {
+  font-size: 1.3rem;
+  line-height: 1.2;
+}
+
+.callout li + li {
+  margin-top: 0.5rem;
+}
+
+.callout a {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.waiting {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.rides,
+.excluded {
+  display: grid;
+  align-content: start;
+  gap: 0.6rem;
+}
+
+.ride + .ride {
+  margin-top: 0.7rem;
+}
+
+.ride-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.45rem;
+  font-size: 1.25rem;
+  line-height: 1.15;
+}
+
+.ride-stops {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.35rem;
+}
+
+.ride-stops li {
+  display: grid;
+  grid-template-columns: 4.4rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+.ride-stops time {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ride-person {
+  font-family: var(--mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.excluded {
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--rule);
+}
+
+.excluded ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1.4rem;
+}
+
+.excluded li {
+  font-size: 1.25rem;
+}
+
+.excluded li span {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* 发布后的变更提议：改了什么、谁受影响、谁不受影响 */
+.changes {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.2rem 1.1rem;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.changes > .label {
+  margin-bottom: 0.5rem;
+  color: var(--accent);
+}
+
+.changes-list li {
+  position: relative;
+  padding-left: 1.2rem;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.changes-list li + li {
+  margin-top: 0.3rem;
+}
+
+.changes-list li::before {
+  content: "";
+  position: absolute;
+  top: 0.62em;
+  left: 0;
+  width: 0.6rem;
+  height: 2px;
+  background: var(--accent);
+}
+
+.changes-who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 2rem;
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule);
+}
+
+.changes-who div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.changes-who dd {
+  font-size: 1.25rem;
+}
+
+/* 还没有方案（收集阶段） */
+.pending-title {
+  font-size: clamp(2.2rem, 3vw, 3rem);
+  line-height: 1.02;
+}
+
+.pending-note {
+  max-width: 46ch;
+  margin-top: 0.7rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  line-height: 1.75;
+  color: var(--muted);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem 2.5rem;
+  margin-top: 1.8rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule);
+}
+
+.stats div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.35rem;
+}
+
+.stats dd {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.pending-allergies {
+  margin-top: 1.3rem;
+  font-size: 1.35rem;
+}
+
+.pending-allergies .label {
+  margin-right: 0.6rem;
+}
+
+/* ───────── 时间线：时刻 | 标记 | 内容 ───────── */
+
+.timeline {
+  --tl-time: 5.3rem;
+  --tl-mark: 1.1rem;
+  --tl-gap: 0.7rem;
+}
+
+.tl {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--tl-time) var(--tl-mark) minmax(0, 1fr);
+  column-gap: var(--tl-gap);
+  padding-bottom: 1.05rem;
+}
+
+.tl:last-child {
+  padding-bottom: 0;
+}
+
+/* 串起各站的线：从这一站的标记下面一直画到下一站的标记 */
+.tl::before {
+  content: "";
+  position: absolute;
+  top: 1.35rem;
+  bottom: -0.4rem;
+  left: calc(var(--tl-time) + var(--tl-gap) + var(--tl-mark) / 2 - 1px);
+  width: 2px;
+  background: var(--ink);
+}
+
+.tl:last-child::before {
+  display: none;
+}
+
+.tl-time {
+  padding-top: 0.34rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 标记形状和地图一致：集合点空心圆，活动三角，餐厅方块，到家实心圆 */
+.tl-mark {
+  justify-self: center;
+  width: 0.9rem;
+  height: 0.9rem;
+  margin-top: 0.4rem;
+  background: var(--ink);
+}
+
+.tl-pickup .tl-mark,
+.tl-stop .tl-mark {
+  border-radius: 50%;
+  background: none;
+  box-shadow: inset 0 0 0 3px var(--ink);
+}
+
+.tl-stop .tl-mark {
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-top: 0.52rem;
+  box-shadow: inset 0 0 0 2.5px var(--ink);
+}
+
+.tl-activity .tl-mark {
+  width: 1rem;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.tl-restaurant .tl-mark {
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-top: 0.45rem;
+  border-radius: 2px;
+}
+
+.tl-home .tl-mark {
+  border-radius: 50%;
+}
+
+.option .tl {
+  padding-bottom: 0.65rem;
+}
+
+.option .tl-title {
+  font-size: 1.3rem;
+}
+
+.tl-title {
+  font-size: 1.4rem;
+  line-height: 1.12;
+}
+
+.tl-detail {
+  margin-top: 0.25rem;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  line-height: 1.55;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.tl-note {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  font-size: 1.15rem;
+  font-style: italic;
+  line-height: 1.25;
+}
+
+/* ───────── 地图 ───────── */
+
+.map {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* 手机上方一点：点挤在一起时标签有地方放 */
+.map-canvas {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+
+@media (min-width: 40em) {
+  .map-canvas {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+.map-canvas svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.map-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+
+.map-empty {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  padding: 2rem;
+  border-radius: 10px;
+  /* 和示意地图一样的点阵底 */
+  background: radial-gradient(circle, var(--rule) 1.2px, transparent 1.4px) 0 0 / 24px 24px, var(--surface);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  line-height: 1.7;
+  text-align: center;
+  color: var(--muted);
+}
+
+.map-dot {
+  fill: var(--rule);
+}
+
+.map-route {
+  animation: juno-fade 0.9s ease both;
+}
+
+.map-route-casing,
+.map-route-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.map-route-casing {
+  stroke: var(--surface);
+}
+
+/* 三种线型：朱红实线、墨色虚线、灰色点线。图例和车组列表里的小样用同样的类 */
+.map-route-line.route-0 {
+  stroke: var(--accent);
+}
+
+.map-route-line.route-1 {
+  stroke: var(--ink);
+  stroke-dasharray: 9 11;
+}
+
+.map-route-line.route-2 {
+  stroke: var(--route-3);
+  stroke-dasharray: 0.1 9;
+}
+
+.map-marker > * {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: juno-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+.map-marker-pickup > * {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+
+.map-marker-activity > *,
+.map-marker-restaurant > * {
+  fill: var(--ink);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+/* 标签描一圈底色的边，压在路线上也看得清 */
+.map-label {
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  fill: var(--ink);
+}
+
+.map-label-name {
+  font-family: var(--serif);
+}
+
+.map-label-people {
+  font-family: var(--mono);
+  fill: var(--muted);
+}
+
+.map-scale path {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+}
+
+.map-scale text {
+  font-family: var(--mono);
+  fill: var(--muted);
+}
+
+.map-legend ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1.3rem;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.map-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+}
+
+.swatch {
+  flex: none;
+  width: 1.9rem;
+  height: 0.65rem;
+  overflow: visible;
+}
+
+.glyph {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  overflow: visible;
+}
+
+/* ───────── 个人行程页（手机优先） ───────── */
+
+.trip {
+  max-width: 44rem;
+  margin-inline: auto;
+}
+
+.trip .masthead-title {
+  font-size: clamp(1.9rem, 6vw, 2.8rem);
+}
+
+.trip-main {
+  display: grid;
+  gap: clamp(2rem, 5vw, 2.75rem);
+}
+
+.headline {
+  font-size: clamp(2.6rem, 10vw, 4rem);
+  line-height: 0.98;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.headline em {
+  color: var(--accent);
+}
+
+.lede {
+  margin-top: 0.9rem;
+  font-size: 1.4rem;
+  line-height: 1.25;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65em;
+  min-height: 3.25rem;
+  margin-top: 1.4rem;
+  padding: 0.95rem 1.6rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition:
+    filter 0.15s,
+    transform 0.15s;
+}
+
+.button:hover {
+  filter: brightness(1.07);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 40em) {
+  .button {
+    display: flex;
+    width: 100%;
+  }
+}
+
+.itinerary {
+  display: grid;
+  gap: 1.75rem;
+}
+
+.updated {
+  padding: 0.9rem 1.1rem 1rem;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.updated-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-bottom: 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.updated li {
+  font-size: 1.3rem;
+  line-height: 1.2;
+}
+
+.updated li + li {
+  margin-top: 0.3rem;
+}
+
+.trip .timeline {
+  --tl-time: 5.6rem;
+}
+
+.trip .tl-title {
+  font-size: 1.6rem;
+}
+
+.carmates .label {
+  margin-bottom: 0.6rem;
+}
+
+.carmates ul {
+  border-top: 1px solid var(--rule);
+}
+
+.carmates li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.2rem 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.carmate-name {
+  font-size: 1.5rem;
+}
+
+.carmate-meta {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.cost {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-block: 2px solid var(--ink);
+}
+
+.cost .label {
+  color: var(--ink);
+}
+
+.cost-value {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.facts {
+  border-top: 1px solid var(--rule);
+}
+
+.facts div {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.facts dd {
+  font-size: 1.4rem;
+  line-height: 1.2;
+}
+
+/* ───────── 页脚、单句页面 ───────── */
+
+.foot {
+  margin-top: clamp(2rem, 4vw, 3rem);
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  font-size: 1.35rem;
+  font-style: italic;
+}
+
+.notice {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+
+.notice-mark {
+  font-size: clamp(3.5rem, 12vw, 6rem);
+  font-style: italic;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.notice-text {
+  max-width: 24ch;
+  font-size: 1.6rem;
+  line-height: 1.2;
+}
+
+/* 加载中晚 0.3 秒才浮现：数据很快回来时不会闪一下 */
+.notice[aria-busy="true"] {
+  animation: juno-fade 0.4s 0.3s both;
+}
+
+.notice[aria-busy="true"] .notice-text {
+  color: var(--muted);
+  animation: juno-breathe 1.8s ease-in-out infinite;
+}
+
+/* ───────── 动画：打开时各栏依次浮上来；新确认的人、新集合点、新方案各播一次 ───────── */
+
+.masthead,
+.dash-main > section,
+.trip-main > *,
+.foot {
+  animation: juno-rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.dash-main > :nth-child(2),
+.trip-main > :nth-child(2) {
+  animation-delay: 80ms;
+}
+
+.dash-main > :nth-child(3),
+.trip-main > :nth-child(3),
+.foot {
+  animation-delay: 160ms;
+}
+
+@keyframes juno-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.8rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes juno-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes juno-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes juno-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .juno *,
+  .juno *::before,
+  .juno *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

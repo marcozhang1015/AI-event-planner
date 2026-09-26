@@ -1,35 +1,41 @@
-// 组织者私聊（§4.3 流程 1）：发起 → 逐个问缺的信息 → 摘要确认 → 邀请。
-// 方案、核实、批准（流程 3）是 M2 的活，入口先占位。
+// 组织者私聊（§4.3 流程 1、3、5）：
+// - 发起：自然语言 → 逐个问缺的信息 → 摘要确认 → 邀请；
+// - 之后先认命令（approve、核实、plan it、邀请、改设置），其余的话当成组织者补答自己的约束（他也去的话）。
 
 import type { BrainContext } from "../brain/extract";
-import { looksLikePlan, normalizePhone, parseDay, parseMoneyCents, parseTimeWindow } from "../brain/parse";
-import { bumpInput, transition } from "../core/state";
-import { fmtMoney, fmtWindow, todayIn, weekdayName } from "../core/time";
-import { prepareCandidates } from "../maps/candidates";
-import { link, templates as t } from "../out/imessage";
-import type { Event, EventPatch, Extraction, Handle, Session } from "../types";
-import { nameFor } from "./contacts";
-import { hasProfile, prefill } from "./memory";
 import {
-  confirmsSummary,
-  emptyAnswer,
-  historyOf,
-  newId,
-  newMember,
-  onlyReactions,
-  say,
-  textOf,
-  textsOf,
-  type Contact,
-  type FlowDeps,
-  type Outbound,
-  type Turn,
-} from "./context";
+  hasChangeCue,
+  isInviteRequest,
+  isPlanRequest,
+  looksLikePlan,
+  parseApproval,
+  parseDay,
+  parseJoining,
+  parseMoneyCents,
+  parseTimeWindow,
+  parseVerification,
+  parseYesNo,
+} from "../brain/parse";
+import { AREA_RADIUS_KM } from "../core/geo";
+import { nameFor } from "../core/handle";
+import { bumpInput, transition } from "../core/state";
+import { findCandidates } from "../maps";
+import { say, summary, type Outbound } from "../out/actions";
+import { templates as t } from "../out/imessage";
+import { planView } from "../out/privacy";
+import { fmtMoney, fmtWindow, todayIn, weekdayName } from "../shared/time";
+import type { Event, EventPatch, Extraction, Session } from "../shared/types";
+import { participantsOf } from "../store/changes";
+import { newId } from "../store/db";
+import { collectTurn, emailTurn, type Collecting, type Done } from "./collect";
+import { brainContext, confirmsSummary, newMember, nextQuestion, onlyReactions, textOf, type FlowDeps, type Turn } from "./context";
+import { inviteTurn, joiningReply } from "./invite";
+import { approve, consentTurn, replan, startReview, verify } from "./planning";
 
-export const ORGANIZER_FIELDS = ["title", "day", "window", "area", "budget"] as const;
-export type OrganizerField = (typeof ORGANIZER_FIELDS)[number];
+const ORGANIZER_FIELDS = ["title", "day", "window", "area", "budget"] as const;
+type OrganizerField = (typeof ORGANIZER_FIELDS)[number];
 
-export function missingOrganizerFields(event: Event): OrganizerField[] {
+function missingOrganizerFields(event: Event): OrganizerField[] {
   const missing: OrganizerField[] = [];
   if (!event.title) missing.push("title");
   if (!event.day) missing.push("day");
@@ -39,7 +45,7 @@ export function missingOrganizerFields(event: Event): OrganizerField[] {
   return missing;
 }
 
-export function applyEventPatch(event: Event, patch: EventPatch): Event {
+function applyEventPatch(event: Event, patch: EventPatch): Event {
   const start = patch.window?.start ?? event.window?.start;
   const end = patch.window?.end ?? event.window?.end;
   return {
@@ -48,7 +54,7 @@ export function applyEventPatch(event: Event, patch: EventPatch): Event {
     day: patch.day ?? event.day,
     window: start && end ? { start, end } : event.window,
     // 区域换了就重新定位
-    area: patch.areaLabel && patch.areaLabel !== event.area?.label ? { label: patch.areaLabel, radiusKm: 15 } : event.area,
+    area: patch.areaLabel && patch.areaLabel !== event.area?.label ? { label: patch.areaLabel, radiusKm: AREA_RADIUS_KM } : event.area,
     budgetCapCents: patch.budgetCapCents ?? event.budgetCapCents,
     headcount: patch.headcount ?? event.headcount,
   };
@@ -59,7 +65,7 @@ function hasChanges(patch: EventPatch): boolean {
 }
 
 /** LLM 不可用时的规则解析。`asked` 是上一个问题问的字段；没有就把能认的都试一遍。 */
-export function fallbackEventPatch(text: string, today: string, asked?: OrganizerField): EventPatch {
+function fallbackEventPatch(text: string, today: string, asked?: OrganizerField): EventPatch {
   const patch: EventPatch = {};
   const tryAll = asked === undefined;
   if (tryAll || asked === "day") {
@@ -103,36 +109,34 @@ function eventLine(event: Event, organizerName: string): string {
 }
 
 function organizerContext(deps: FlowDeps, turn: Turn, event: Event): BrainContext {
-  const today = todayIn(deps.timezone, deps.now);
-  return {
-    today: `${today} (${weekdayName(today)})`,
+  return brainContext(deps, turn, {
     eventLine: eventLine(event, "them"),
     known: { title: event.title || undefined, day: event.day, window: event.window, area: event.area?.label, budgetCapCents: event.budgetCapCents, headcount: event.headcount },
     missing: missingOrganizerFields(event),
-    history: historyOf(deps, turn.handle),
-    incoming: textsOf(turn),
-  };
+  });
 }
+
+/** 组织者确认活动、改了区域时：按区域搜候选活动和餐厅（demo 读缓存），存下场地，记在活动上。 */
+async function prepareCandidates(deps: FlowDeps, event: Event): Promise<Event> {
+  if (!event.area) return event;
+  const { area, candidates } = await findCandidates(deps.maps, event.area, event.title, deps.mapsRegion);
+  for (const { place, venue } of candidates) {
+    deps.db.putPlace(place);
+    deps.db.putVenue(venue);
+  }
+  return { ...event, area, candidateVenueIds: candidates.map(({ venue }) => venue.id) };
+}
+
+// 发起（DRAFT）
 
 function askNext(deps: FlowDeps, turn: Turn, session: Session, event: Event, ai: Extraction<EventPatch> | undefined): Outbound[] {
   const next = missingOrganizerFields(event)[0];
   if (!next) {
-    const confirming: Session = { ...session, awaiting: "summary_confirm", asked: undefined };
-    deps.db.putSession(confirming);
-    return [
-      {
-        kind: "send",
-        to: turn.handle,
-        parts: [t.organizerSummary(event)],
-        // 记下摘要消息的 id：对它点 👍 就算确认
-        onSent: ([id]) => deps.db.store.saveSession({ ...confirming, summaryMessageId: id }),
-      },
-    ];
+    deps.db.putSession({ ...session, awaiting: "summary_confirm", asked: undefined });
+    return [summary(turn.handle, t.organizerSummary(event))];
   }
   deps.db.putSession({ ...session, awaiting: undefined, asked: next });
-  // Claude 的措辞只有在它问的正是代码算出的下一个字段时才用
-  const question = ai?.askingAbout === next && ai.reply ? ai.reply : t.organizerAsk(next, event);
-  return [say(turn.handle, question)];
+  return [say(turn.handle, nextQuestion(ai, next, t.organizerAsk(next, event)))];
 }
 
 async function startEvent(deps: FlowDeps, turn: Turn): Promise<Outbound[]> {
@@ -185,87 +189,87 @@ async function confirmEvent(deps: FlowDeps, turn: Turn, session: Session, event:
   return [say(turn.handle, t.askInvitees())];
 }
 
-const NOT_NAMES = new Set(["i", "im", "i'm", "me", "too", "also", "and", "invite", "add", "plus", "everyone", "all", "us", "we", "the", "crew", "guys"]);
+// 发起之后（COLLECTING / REVIEW / PUBLISHED）
 
-/** 从联系人卡片和名字里找出要邀请的人；通讯录里没有的名字放进 unknown。 */
-export function resolveInvitees(turn: Turn, contacts: Contact[], organizer: Handle): { found: Contact[]; unknown: string[] } {
-  const found = new Map<Handle, Contact>();
-  for (const card of turn.incoming.filter((item) => item.kind === "contact")) {
-    const phone = card.phones?.[0];
-    if (!phone) continue;
-    const handle = normalizePhone(phone);
-    found.set(handle, { name: card.contactName?.split(" ")[0] || handle, handle });
-  }
-
-  const text = textOf(turn);
-  for (const contact of contacts) {
-    const pattern = new RegExp(`\\b${contact.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-    if (contact.handle !== organizer && pattern.test(text)) found.set(contact.handle, contact);
-  }
-
-  const known = new Set(contacts.map((contact) => contact.name.toLowerCase()));
-  const firstSentence = text.split(/[.!?\n]/)[0] ?? "";
-  const unknown = firstSentence
-    .split(/,|\band\b|&|\s+/)
-    .map((word) => word.trim().toLowerCase())
-    .filter((word) => /^[a-z][a-z'-]{1,20}$/.test(word) && !NOT_NAMES.has(word) && !known.has(word))
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1));
-  return { found: [...found.values()], unknown: [...new Set(unknown)] };
-}
-
-function inviteTurn(deps: FlowDeps, turn: Turn, session: Session, event: Event): Outbound[] {
-  const { found, unknown } = resolveInvitees(turn, deps.contacts, event.organizer);
-  if (!found.length) return [say(turn.handle, unknown.length ? t.unknownInvitees(unknown) : t.askInvitees())];
-
-  const organizer = deps.db.member(event.id, event.organizer);
-  const invites: Outbound[] = [];
-  const invited: string[] = [];
-  for (const contact of found) {
-    if (deps.db.member(event.id, contact.handle)) continue;
-    // 以前确认过偏好的人：预填成"待确认"，开场白也说明这次会很快
-    const person = deps.db.person(contact.handle);
-    const returning = hasProfile(person);
-    const blank = emptyAnswer(event.id, contact.handle);
-    const pickup = person?.pickupPlaceId ? deps.db.place(person.pickupPlaceId) : undefined;
-    deps.db.putMember({ ...newMember(event.id, contact.handle, contact.name, "attendee"), email: person?.email });
-    deps.db.putAnswer(returning ? prefill(blank, person, event.area, pickup) : blank);
-    deps.db.putSession({ handle: contact.handle, eventId: event.id, role: "attendee", awaiting: "opener" });
-    invites.push(say(contact.handle, t.opener(contact.name, organizer?.name ?? "a friend", event, deps.agentName, returning)));
-    invited.push(contact.name);
-  }
-  // TODO(B, M2)：组织者说 "I'm in too and can drive 2" 时，把他也当参与者收集约束
-  deps.db.putSession({ ...session, awaiting: undefined });
-
-  const reply = invited.length ? [t.invitesSent(invited), link(`${deps.baseUrl}/o/${organizer?.linkToken}`)] : [t.noted()];
-  if (unknown.length) reply.push(t.unknownInvitees(unknown));
-  return [say(turn.handle, ...reply), ...invites];
+/** 组织者参加的话，他自己那份答案正在收集的状态。 */
+function ownCollecting(deps: FlowDeps, session: Session, event: Event): Collecting | undefined {
+  const member = deps.db.member(event.id, event.organizer);
+  const answer = deps.db.answer(event.id, event.organizer);
+  return member && answer ? { session, event, member, answer } : undefined;
 }
 
 function statusLine(deps: FlowDeps, event: Event): string {
-  const attendees = deps.db.membersOf(event.id).filter((member) => member.role === "attendee");
-  const waiting = attendees.filter((member) => member.status !== "confirmed" && member.status !== "declined").map((member) => member.name);
-  return t.collectingStatus(attendees.length - waiting.length, attendees.length, waiting);
+  const people = participantsOf(deps.db, event);
+  const waiting = people.filter(({ answer }) => !answer.confirmed).map(({ member }) => (member.handle === event.organizer ? "you" : member.name));
+  return t.collectingStatus(people.length - waiting.length, people.length, waiting);
+}
+
+/** 没有命令、也不是补答自己约束时的回复：收集阶段报进度，出方案后提示怎么批准。 */
+function help(deps: FlowDeps, event: Event): string {
+  if (event.status === "COLLECTING") return statusLine(deps, event);
+  const plan = deps.db.latestPlan(event.id);
+  return t.reviewHelp(plan ? planView(deps.db, event, plan, event.organizer) : undefined);
+}
+
+/** 组织者要改活动设置吗：要有明确的说法，而且确实抽出了改动。 */
+async function eventChange(deps: FlowDeps, turn: Turn, event: Event): Promise<EventPatch | undefined> {
+  const text = textOf(turn);
+  if (!hasChangeCue(text)) return undefined;
+  const ai = await deps.brain.organizer(organizerContext(deps, turn, event));
+  const patch = ai?.patch ?? fallbackEventPatch(text, todayIn(deps.timezone, deps.now));
+  return hasChanges(patch) ? patch : undefined;
+}
+
+/** 改活动设置：区域变了就重新搜候选；版本号 +1。出过方案就重新求解，把新方案发给组织者。 */
+async function changeEvent(deps: FlowDeps, event: Event, patch: EventPatch): Promise<Outbound[]> {
+  let updated = applyEventPatch(event, patch);
+  if (updated.area?.label !== event.area?.label) updated = await prepareCandidates(deps, updated);
+  updated = bumpInput(updated);
+  deps.db.putEvent(updated);
+  // 组织者参加、空闲时间就是原来的时间窗：跟着新时间窗走
+  const own = deps.db.answer(event.id, event.organizer);
+  if (own && event.window && updated.window && JSON.stringify(own.free) === JSON.stringify([event.window])) {
+    deps.db.putAnswer({ ...own, free: [updated.window] });
+  }
+  if (updated.status === "COLLECTING") return [say(event.organizer, t.eventUpdated(eventLine(updated, "you")))];
+  return replan(deps, updated, t.noted());
+}
+
+async function manageTurn(deps: FlowDeps, turn: Turn, session: Session, event: Event): Promise<Outbound[]> {
+  const text = textOf(turn);
+  const organizer = event.organizer;
+  if (session.awaiting === "invitees") return inviteTurn(deps, turn, session, event, true);
+  if (session.awaiting === "drive_consent") return consentTurn(deps, turn, session, event);
+  if (session.awaiting === "joining") {
+    const joining = parseJoining(text) ?? parseYesNo(text);
+    if (joining !== undefined) return joiningReply(deps, turn, session, event, joining);
+  }
+
+  const approval = parseApproval(text);
+  if (approval) return event.status === "COLLECTING" ? [say(organizer, t.noPlanYet())] : approve(deps, turn, event, approval.label);
+  const verified = event.status === "COLLECTING" ? undefined : parseVerification(text);
+  if (verified !== undefined) return verify(deps, event, verified, text);
+  if (isPlanRequest(text) && event.status !== "PUBLISHED") return startReview(deps, event, { requested: true });
+  if (isInviteRequest(text) || turn.incoming.some((item) => item.kind === "contact")) return inviteTurn(deps, turn, session, event, false);
+
+  const patch = await eventChange(deps, turn, event);
+  if (patch) return changeEvent(deps, event, patch);
+
+  const own = ownCollecting(deps, session, event);
+  if (own) {
+    // 他是最后一个确认的人时，方案马上就发给他了，不用再报进度
+    const done: Done = () => {
+      const current = deps.db.event(event.id) ?? event;
+      return current.status === "COLLECTING" ? statusLine(deps, current) : undefined;
+    };
+    const answered = (session.awaiting === "email" ? emailTurn(deps, turn, own, done) : undefined) ?? (await collectTurn(deps, turn, own, done));
+    if (answered) return answered;
+  }
+  return [say(organizer, help(deps, event))];
 }
 
 export async function organizerTurn(deps: FlowDeps, turn: Turn, session: Session): Promise<Outbound[]> {
   const event = session.eventId ? deps.db.event(session.eventId) : undefined;
   if (!event) return startEvent(deps, turn);
-
-  switch (event.status) {
-    case "DRAFT":
-      return draftTurn(deps, turn, session, event);
-    case "COLLECTING": {
-      if (session.awaiting === "invitees") return inviteTurn(deps, turn, session, event);
-      if (/\bplan it\b|\bgo ahead\b|开始排/i.test(textOf(turn))) {
-        // TODO(B + C, M2)：进入 REVIEW，调用 solve()，发方案消息（§4.3 流程 3）
-        return [say(turn.handle, t.planningNotReady())];
-      }
-      if (resolveInvitees(turn, deps.contacts, event.organizer).found.length) return inviteTurn(deps, turn, session, event);
-      return [say(turn.handle, statusLine(deps, event))];
-    }
-    case "REVIEW":
-    case "PUBLISHED":
-      // TODO(B, M2)：修改、核实 UNKNOWN、approve、发布后变更（§4.3 流程 3–5）
-      return [say(turn.handle, t.planningNotReady())];
-  }
+  return event.status === "DRAFT" ? draftTurn(deps, turn, session, event) : manageTurn(deps, turn, session, event);
 }

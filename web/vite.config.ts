@@ -3,9 +3,13 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 // 开发：bun run web:dev，打开 http://localhost:5173/sim 或 /o/<token>；/api 和模拟器的 WebSocket 转发给 Bun 服务（3000 端口）。
+// @shared → src/shared/：网页只从这里引用服务端的代码（类型、视图结构、格式化），tsconfig.json 里的 paths 和它一致。
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [react()],
+  resolve: {
+    alias: { "@shared": fileURLToPath(new URL("../src/shared", import.meta.url)) },
+  },
   server: {
     port: 5173,
     proxy: {

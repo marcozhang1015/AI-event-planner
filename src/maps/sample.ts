@@ -1,7 +1,9 @@
+// 离线开发用的虚构地图数据（fixtures/sample-maps.json，MAPS_MODE=sample）。
+
 import sampleData from "../../fixtures/sample-maps.json";
-import type { Area, Fact, Place, TravelTime, Venue } from "../types";
-import { distanceKm } from "./geo";
-import type { Maps, VenueHit } from "./types";
+import { AREA_RADIUS_KM, distanceKm } from "../core/geo";
+import type { Area, Candidate, Fact, Place, TravelTime, Venue } from "../shared/types";
+import type { Maps } from "./types";
 
 interface SamplePlace {
   id: string;
@@ -45,7 +47,7 @@ export class SampleMaps implements Maps {
       .map((hit) => toPlace(hit.place));
   }
 
-  async searchVenues(query: string, kind: Venue["kind"], _near: Area): Promise<VenueHit[]> {
+  async searchVenues(query: string, kind: Venue["kind"], _near: Area): Promise<Candidate[]> {
     return this.venues
       .filter((venue) => venue.kind === kind)
       .map((venue) => ({ venue, score: score(venue, query) }))
@@ -79,4 +81,4 @@ export class SampleMaps implements Maps {
   }
 }
 
-export const sampleCenter: Area = { label: sampleData.center.label, lat: sampleData.center.lat, lng: sampleData.center.lng, radiusKm: 15 };
+export const sampleCenter: Area = { label: sampleData.center.label, lat: sampleData.center.lat, lng: sampleData.center.lng, radiusKm: AREA_RADIUS_KM };

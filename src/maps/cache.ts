@@ -2,8 +2,8 @@
 // 缓存目录不进 git（地图服务商的条款限制缓存和存储它的数据），只在本机、只在 hackathon 期间用。
 
 import { createHash } from "node:crypto";
-import type { Area, Place, TravelTime, Venue } from "../types";
-import type { Maps, VenueHit } from "./types";
+import type { Area, Candidate, Place, TravelTime, Venue } from "../shared/types";
+import type { Maps } from "./types";
 
 type TravelTable = Record<string, TravelTime>;
 
@@ -32,7 +32,7 @@ export class CachedMaps implements Maps {
     return (await this.cached("searchPlaces", [query, near], () => this.live!.searchPlaces(query, near))) ?? [];
   }
 
-  async searchVenues(query: string, kind: Venue["kind"], near: Area): Promise<VenueHit[]> {
+  async searchVenues(query: string, kind: Venue["kind"], near: Area): Promise<Candidate[]> {
     return (await this.cached("searchVenues", [query, kind, near], () => this.live!.searchVenues(query, kind, near))) ?? [];
   }
 

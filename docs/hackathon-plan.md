@@ -355,6 +355,8 @@ flowchart LR
 - **存储与其他**：存储用 `bun:sqlite`；ICS 手写字符串生成；测试用 `bun test`。
 - **环境变量**：见 `.env.example`。主要有 `PROVIDERS=imessage,sim`、`SPECTRUM_PROJECT_ID`、`SPECTRUM_PROJECT_SECRET`、`ANTHROPIC_API_KEY`（`LLM=off` 时不调模型）、`MAPS_MODE=sample|cache|live`（`sample` 是离线开发用的虚构数据）、`MAPS_SERVER_KEY`、`MAPS_BROWSER_KEY`、`MAPS_REGION`、`EMAIL_DRIVER`、`EMAIL_FROM`、`PUBLIC_BASE_URL`。
 
+下面是开工时定的目录和分工；实现过程中目录整理过，现在的目录以 README 的「目录」一节为准。
+
 ```text
 src/
   index.ts            启动 Spectrum 收消息循环和 HTTP 服务                     (B)

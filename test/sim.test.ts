@@ -2,10 +2,9 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { Spectrum, type Message, type Space } from "spectrum-ts";
-import { toContent } from "../src/io/transport";
-import { SimHub } from "../src/sim/hub";
-import { sim } from "../src/sim/platform";
-import type { SimServerEvent } from "../src/sim/protocol";
+import { SimHub, sim } from "../src/io/simulator";
+import { render } from "../src/io/transport";
+import type { SimServerEvent } from "../src/shared/sim";
 
 const stops: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -49,8 +48,8 @@ describe("sim provider", () => {
     hub.userSends("sam", "hi");
     const [space] = await next();
 
-    await space.send(toContent({ type: "link", url: "http://localhost:3000/o/abc" }, "sim"));
-    await space.send(toContent({ type: "celebrate", text: "You're all set 🎉" }, "sim"));
+    await space.send(render({ type: "link", url: "http://localhost:3000/o/abc" }, true));
+    await space.send(render({ type: "celebrate", text: "You're all set 🎉" }, true));
     const [, link, party] = hub.thread("sam");
     expect(link).toMatchObject({ from: "agent", kind: "link", url: "http://localhost:3000/o/abc" });
     expect(party).toMatchObject({ from: "agent", kind: "text", text: "You're all set 🎉", effect: "confetti" });

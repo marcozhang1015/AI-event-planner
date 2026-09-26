@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { SimClientEvent, SimItem, SimPerson, SimServerEvent } from "../../../src/sim/protocol";
+import type { SimClientEvent, SimItem, SimPerson, SimServerEvent } from "@shared/sim";
 
 export type SimStatus = "connecting" | "live" | "offline";
 

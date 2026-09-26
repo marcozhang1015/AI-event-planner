@@ -4,8 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { config } from "../config";
-import type { AnswerPatch, EventPatch, Extraction } from "../types";
+import type { AnswerPatch, EventPatch, Extraction } from "../shared/types";
 import { parseEmail } from "./parse";
 import { ATTENDEE_SYSTEM, ORGANIZER_SYSTEM } from "./prompts";
 
@@ -122,14 +121,19 @@ function renderContext(context: BrainContext): string {
   ].join("\n\n");
 }
 
-export function claudeBrain(client = new Anthropic()): Brain {
+export interface ClaudeOptions {
+  model: string;
+  timeoutMs: number;
+}
+
+export function claudeBrain(options: ClaudeOptions, client = new Anthropic()): Brain {
   async function run<S extends z.ZodType>(system: string, schema: S, context: BrainContext): Promise<z.infer<S> | undefined> {
     const content = renderContext(context);
     let response;
     try {
       response = await client.beta.messages.parse(
         {
-          model: config.model,
+          model: options.model,
           max_tokens: 16000,
           betas: ["server-side-fallback-2026-07-01"],
           fallbacks: "default",
@@ -137,7 +141,7 @@ export function claudeBrain(client = new Anthropic()): Brain {
           output_config: { effort: "low", format: betaZodOutputFormat(schema) },
           messages: [{ role: "user", content }],
         },
-        { timeout: config.llmTimeoutMs, maxRetries: 0 },
+        { timeout: options.timeoutMs, maxRetries: 0 },
       );
     } catch (error) {
       // 超时、限流、没配凭证（SDK 抛的是普通 Error）……调用失败一律退回模板（§5.12）
@@ -164,8 +168,4 @@ export function claudeBrain(client = new Anthropic()): Brain {
       return { intent: output.intent, patch: toAnswerPatch(output.patch), askingAbout: output.askingAbout ?? undefined, reply: output.reply };
     },
   };
-}
-
-export function createBrain(): Brain {
-  return config.llm ? claudeBrain() : offlineBrain;
 }
