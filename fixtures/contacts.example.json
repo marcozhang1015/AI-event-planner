@@ -1,0 +1,8 @@
+{
+  "_note": "demo 通讯录：名字 → handle。复制成 fixtures/contacts.json（不进 git）再改。sim:<id> 是网页模拟器（/sim）里的一部手机；term:<窗口 id> 是终端窗口（TUI 默认 term:chat-1，管道输入时 term:terminal）；真人写 E.164 号码或 iMessage 邮箱，比如 +15551234567（先在 Dashboard → Users 登记）。可以混着用：比如 Alex 用真手机，其他人在模拟器里。",
+  "Alex": "sim:alex",
+  "Sam": "sim:sam",
+  "Priya": "sim:priya",
+  "Leo": "sim:leo",
+  "Mia": "sim:mia"
+}

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "juno",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["PROVIDERS=sim", "LLM=off", "DEBOUNCE_MS=800", "bun", "src/index.ts"],
+      "port": 3000
+    }
+  ]
+}

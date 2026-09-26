@@ -1,0 +1,88 @@
+{
+  "_note": "虚构的示例数据，只用于离线开发（MAPS_MODE=sample）。地点、价格、过敏事实都是编的，不对应任何真实商家。",
+  "center": { "label": "Sample Town", "lat": 39.8283, "lng": -98.5795 },
+  "places": [
+    { "id": "sample:main-library", "name": "Main Library (north entrance)", "lat": 39.8301, "lng": -98.5812, "keywords": ["library", "main library"] },
+    { "id": "sample:north-station", "name": "North Station", "lat": 39.8412, "lng": -98.5741, "keywords": ["north station", "station", "train"] },
+    { "id": "sample:campus-gate", "name": "Campus Gate", "lat": 39.8266, "lng": -98.5902, "keywords": ["campus", "gate", "campus gate"] },
+    { "id": "sample:town-square", "name": "Town Square", "lat": 39.8283, "lng": -98.5795, "keywords": ["downtown", "square", "center"] }
+  ],
+  "venues": [
+    {
+      "id": "sample:pine-ridge-trail",
+      "kind": "activity",
+      "name": "Pine Ridge Trail",
+      "lat": 39.8795,
+      "lng": -98.6123,
+      "keywords": ["hike", "trail", "walk", "nature"],
+      "priceMinCents": 0,
+      "priceMaxCents": 0,
+      "durationMinutes": 120,
+      "facts": {}
+    },
+    {
+      "id": "sample:lakeside-kayak",
+      "kind": "activity",
+      "name": "Lakeside Kayak Rental",
+      "lat": 39.8052,
+      "lng": -98.5501,
+      "keywords": ["kayak", "lake", "boat"],
+      "priceMinCents": 2000,
+      "priceMaxCents": 2500,
+      "durationMinutes": 90,
+      "facts": {}
+    },
+    {
+      "id": "sample:maple-kitchen",
+      "kind": "restaurant",
+      "name": "Maple Kitchen",
+      "lat": 39.8352,
+      "lng": -98.5688,
+      "keywords": ["restaurant", "dinner", "american"],
+      "priceMinCents": 2200,
+      "priceMaxCents": 3000,
+      "hours": "11 AM–10 PM",
+      "phone": "555-0142",
+      "facts": { "vegetarian": "SUPPORTED" }
+    },
+    {
+      "id": "sample:olive-tree",
+      "kind": "restaurant",
+      "name": "Olive Tree",
+      "lat": 39.8233,
+      "lng": -98.5721,
+      "keywords": ["restaurant", "dinner", "mediterranean"],
+      "priceMinCents": 3000,
+      "priceMaxCents": 3800,
+      "hours": "5 PM–10 PM",
+      "phone": "555-0177",
+      "facts": { "peanut": "SUPPORTED", "tree_nut": "SUPPORTED", "vegetarian": "SUPPORTED" }
+    },
+    {
+      "id": "sample:golden-wok",
+      "kind": "restaurant",
+      "name": "Golden Wok",
+      "lat": 39.8391,
+      "lng": -98.5832,
+      "keywords": ["restaurant", "dinner", "chinese"],
+      "priceMinCents": 1500,
+      "priceMaxCents": 2200,
+      "hours": "11 AM–9:30 PM",
+      "phone": "555-0163",
+      "facts": { "peanut": "UNSUPPORTED" }
+    },
+    {
+      "id": "sample:taco-garage",
+      "kind": "restaurant",
+      "name": "Taco Garage",
+      "lat": 39.8174,
+      "lng": -98.5943,
+      "keywords": ["restaurant", "dinner", "mexican", "tacos"],
+      "priceMinCents": 1200,
+      "priceMaxCents": 1800,
+      "hours": "11 AM–11 PM",
+      "phone": "555-0119",
+      "facts": {}
+    }
+  ]
+}
