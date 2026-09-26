@@ -734,6 +734,40 @@
   border-color: var(--me);
 }
 
+/* 录屏脚本用的假输入框：能逐字显示，并带闪烁光标 */
+.mirror {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid #d1d1d6;
+  border-radius: 18px;
+  font-size: 15px;
+  line-height: 1.25;
+  color: #000;
+  background: #fff;
+}
+
+.mirror .placeholder {
+  color: #8e8e93;
+}
+
+.mirror.on {
+  border-color: var(--me);
+}
+
+.mirror .caret {
+  flex: none;
+  width: 1.5px;
+  height: 1.05em;
+  margin-left: 1px;
+  background: var(--me);
+  animation: caret 1s steps(2) infinite;
+}
+
 .send {
   flex: none;
   width: 30px;
@@ -870,6 +904,12 @@
   }
 }
 
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+
 @keyframes fall {
   0% {
     opacity: 1;
@@ -906,6 +946,7 @@
   .reaction,
   .picker,
   .bubble.typing i,
+  .mirror .caret,
   .status .dot {
     animation: none !important;
   }

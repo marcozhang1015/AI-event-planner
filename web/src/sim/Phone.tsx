@@ -15,6 +15,11 @@ interface PhoneProps {
   fresh: Set<string>;
   onSend: (text: string) => void;
   onReact: (targetId: string, emoji: string) => void;
+  /** 录屏脚本：输入框由外部逐字驱动，不能手打，也不能点 tapback。 */
+  scripted?: boolean;
+  scriptDraft?: string;
+  composing?: boolean;
+  showHandle?: boolean;
 }
 
 function Confetti() {
@@ -106,8 +111,10 @@ function Reactions({ item }: { item: SimItem }) {
   );
 }
 
-export function Phone({ person, index, items, typing, fresh, onSend, onReact }: PhoneProps) {
-  const [draft, setDraft] = useState("");
+export function Phone({ person, index, items, typing, fresh, onSend, onReact, scripted = false, scriptDraft = "", composing = false, showHandle = true }: PhoneProps) {
+  const [ownDraft, setOwnDraft] = useState("");
+  const draft = scripted ? scriptDraft : ownDraft;
+  const setDraft = setOwnDraft;
   const [pickerFor, setPickerFor] = useState<string>();
   const [burst, setBurst] = useState(0);
   const [flash, setFlash] = useState(false);
@@ -125,6 +132,12 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact }: 
     return () => clearTimeout(timer);
   }, [last?.id, typing]);
 
+  // 剧本逐字输入时输入框会变高，把已经滚到底的对话留在可见区域
+  useEffect(() => {
+    if (!scripted) return;
+    thread.current?.scrollTo({ top: thread.current.scrollHeight });
+  }, [scriptDraft, scripted]);
+
   useEffect(() => {
     if (!burst) return;
     const timer = setTimeout(() => setBurst(0), 3200);
@@ -133,6 +146,7 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact }: 
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (scripted) return;
     const text = draft.trim();
     if (!text) return;
     onSend(text);
@@ -146,7 +160,7 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact }: 
       <div className="phone-label">
         <span className={`lamp ${lamp}`} aria-hidden />
         <span className="phone-name">{person.name}</span>
-        <span className="phone-handle">sim:{person.id}</span>
+        {showHandle && <span className="phone-handle">sim:{person.id}</span>}
       </div>
 
       <div className="device">
@@ -179,7 +193,7 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact }: 
               Today 9:41 AM
             </p>
 
-            {items.length === 0 && (
+            {items.length === 0 && !scripted && (
               <div className="thread-empty">
                 <p>No messages yet. Say hi to Juno — or wait for an invite.</p>
                 <button type="button" className="suggestion" onClick={() => setDraft(SUGGESTION)}>
@@ -216,6 +230,8 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact }: 
                       <LinkCard url={item.url} />
                     ) : mine ? (
                       <div className="bubble mine">{item.text}</div>
+                    ) : scripted ? (
+                      <div className={`bubble theirs ${item.effect ? "effect" : ""}`}>{item.text}</div>
                     ) : (
                       <button
                         type="button"
@@ -250,7 +266,14 @@ export function Phone({ person, index, items, typing, fresh, onSend, onReact }: 
             </span>
             <label className="field">
               <span className="sr-only">Message Juno as {person.name}</span>
-              <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="iMessage" autoComplete="off" />
+              {scripted ? (
+                <div className={`mirror ${composing ? "on" : ""}`}>
+                  {draft ? <span className="typed">{draft}</span> : <span className="placeholder">iMessage</span>}
+                  {composing && <i className="caret" />}
+                </div>
+              ) : (
+                <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="iMessage" autoComplete="off" />
+              )}
             </label>
             <button type="submit" className="send" disabled={!draft.trim()} aria-label="Send">
               ↑
