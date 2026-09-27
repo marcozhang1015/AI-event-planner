@@ -47,6 +47,28 @@ describe("组织者发起", () => {
     expect(h.event().candidateVenueIds.length).toBeGreaterThan(0);
   });
 
+  test("问预算时回答里只有数字、没写 $ 也能认出来", async () => {
+    const h = new Harness();
+    await h.send(ALEX, "plan a hike + dinner saturday near campus");
+    await h.send(ALEX, "2-10");
+    expect(textsTo(await h.send(ALEX, "I want to do 50"), ALEX)[0]).toContain("Up to $50 per person (hard cap)");
+  });
+
+  test("时间窗只说了几点开始：结束先按晚上 10 点，摘要里给组织者确认；听不懂时换个说法再问", async () => {
+    const h = new Harness();
+    await h.send(ALEX, "plan a hike + dinner saturday near campus, max $40 each");
+    expect(textsTo(await h.send(ALEX, "afternoon"), ALEX)).toEqual([`Sorry, I didn't catch that. What hours on Saturday? Something like "2 to 10 PM" or "after 3".`]);
+    expect(textsTo(await h.send(ALEX, "after 3"), ALEX)[0]).toContain("Saturday 3–10 PM");
+  });
+
+  test("问邀请谁时说 later：不会把 Later 当成人名", async () => {
+    const h = new Harness();
+    await h.send(ALEX, "plan a hike + dinner saturday near campus, max $40 each");
+    await h.send(ALEX, "2-10");
+    await h.send(ALEX, "yes");
+    expect(textsTo(await h.send(ALEX, "later"), ALEX)).toEqual(["No rush — send me their names or contacts whenever you're ready."]);
+  });
+
   test("回 no 不会确认，而是问要改什么", async () => {
     const h = new Harness();
     await h.send(ALEX, "plan a hike + dinner saturday near campus, max $40");
@@ -188,6 +210,53 @@ describe("参与者私聊", () => {
     expect(textsTo(await h.send(SAM, "not now"), SAM)).toEqual(["No worries — text me whenever you have a minute."]);
   });
 
+  test("问邮箱时说 I'd rather not：当成跳过，不会把要人接的人改成司机", async () => {
+    const h = new Harness();
+    await setUpEvent(h);
+    // 确认摘要之后停在问邮箱这一步
+    await answer(h, SAM, "sure", "after 3", "none", "need a ride, I'm near the library", "yeah", "yep");
+    expect(textsTo(await h.send(SAM, "I'd rather not"), SAM)).toEqual(["Perfect. I'll text you as soon as the plan is set."]);
+    expect(h.store.getAnswer(h.event().id, SAM)).toMatchObject({ drives: "no", confirmed: true });
+  });
+
+  test("过敏问题回答忌口（vegetarian）：记成忌口，不会变成要打电话核实的过敏", async () => {
+    const h = new Harness();
+    await setUpEvent(h);
+    await answer(h, SAM, "sure", "after 3");
+    expect(textsTo(await h.send(SAM, "I'm vegetarian"), SAM)[0]).toStartWith("Do you drive, or need a ride?");
+    expect(h.store.getAnswer(h.event().id, SAM)).toMatchObject({ allergies: [], diet: ["vegetarian"] });
+  });
+
+  test("问开不开车：yes 是开车、no 是要人接；听不懂时换个说法再问", async () => {
+    for (const [reply, next] of [
+      ["yes", "How many people can you take?"],
+      ["no", "Where should we pick you up? A landmark near you is enough."],
+      ["hmm", `Sorry, I didn't catch that. Will you drive, or do you need a ride? "I can drive" or "need a ride" is perfect.`],
+    ] as const) {
+      const h = new Harness();
+      await setUpEvent(h);
+      await answer(h, SAM, "sure", "after 3", "none");
+      expect(textsTo(await h.send(SAM, reply), SAM)).toEqual([next]);
+    }
+  });
+
+  test("预算：回答里带了别的数字（没写 $）就记下这个数", async () => {
+    const h = new Harness();
+    await setUpEvent(h);
+    await answer(h, SAM, "sure", "after 3", "none", "need a ride, I'm near the library");
+    expect(textsTo(await h.send(SAM, "I want to do 50"), SAM)[0]).toContain("• Budget up to $50");
+  });
+
+  test("预算：不接受组织者定的上限，就改问本人最多花多少，不再重复原来的问题", async () => {
+    const h = new Harness();
+    await setUpEvent(h);
+    await answer(h, SAM, "sure", "after 3", "none", "need a ride, I'm near the library");
+    expect(textsTo(await h.send(SAM, "no"), SAM)).toEqual(["No problem — what's the most you'd want to spend? Alex won't see the number."]);
+    // 还是没给数字：换个说法再问，不退回原来那句 $40 的问题
+    expect(textsTo(await h.send(SAM, "hmm not sure"), SAM)).toEqual(["Sorry, I didn't catch that. What's the most you'd want to spend? Just a number, like 30."]);
+    expect(textsTo(await h.send(SAM, "maybe 25"), SAM)[0]).toContain("• Budget up to $25");
+  });
+
   test("确认后改答案：重新发摘要，等本人再确认", async () => {
     const h = new Harness();
     await setUpEvent(h);
@@ -246,9 +315,11 @@ describe("参与者私聊", () => {
 });
 
 describe("Claude 的输出只是提议", () => {
+  // 只有回答时间的那一句（"after 3"）抽出字段；其他句子当作 Claude 没给结果
   const fakeBrain = (askingAbout: string, reply: string): Brain => ({
     ...offlineBrain,
-    attendee: async () => ({ intent: "answer", patch: { free: { start: "15:00" }, homeBy: "22:00" }, askingAbout, reply }),
+    attendee: async (context) =>
+      context.incoming.join(" ").includes("after 3") ? { intent: "answer", patch: { free: { start: "15:00" }, homeBy: "22:00" }, askingAbout, reply } : undefined,
   });
 
   test("问的正是下一个缺失字段：用 Claude 的措辞", async () => {

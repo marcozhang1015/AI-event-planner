@@ -42,7 +42,7 @@ describe("幕 3：方案、核实、批准", () => {
   test("最后一个人确认 → 方案发给组织者：接人、活动、晚餐、待核实项和电话、Plan B", () => {
     expect(recipients(planOut)).toEqual([MIA, ALEX]);
     const [message, link, prompt] = textsTo(planOut, ALEX);
-    expect(message).toStartWith("All 5 ready. Here's what works:\nPlan A works for all 5:");
+    expect(message).toStartWith("All 5 ready.\nPlan A works for all 5:");
     expect(message).toContain("Pine Ridge Trail (free)");
     expect(message).toContain("Maple Kitchen (~$22–30 per person)");
     expect(message).toContain("⚠️ One thing I can't confirm: whether Maple Kitchen can handle a severe peanut allergy. Could you give them a call? 555-0142");
@@ -147,6 +147,15 @@ describe("批准检查", () => {
     expect(message).toStartWith("Noted — Maple Kitchen can't handle it, so I've taken it off the table.\nPlan A works for");
     const plan = h.store.latestPlan(h.event().id)!;
     for (const option of plan.options) if (option.attendees.includes(SAM)) expect(option.dinner.venueId).not.toBe("sample:maple-kitchen");
+  });
+
+  test("组织者说 max $35 each：改人均上限，重新出方案", async () => {
+    const h = new Harness();
+    await everyoneConfirms(h);
+    const before = h.event().inputVersion;
+    await h.send(ALEX, "max $35 each");
+    expect(h.event().budgetCapCents).toBe(3500);
+    expect(h.event().inputVersion).toBeGreaterThan(before);
   });
 
   test("组织者改设置（can we start at 4?）：新方案版本号更大，从 4 点以后开始；旧方案不能再批准", async () => {
@@ -275,5 +284,71 @@ describe("幕 4：发布后司机退出", () => {
     const event = h.event();
     const priya = attendeeView(h.reader(), event, h.store.getMember(event.id, PRIYA)!, VIEWS);
     expect(priya.itinerary).toMatchObject({ role: "rider", version: 2, changes: ["Leo picks you up now"] });
+  });
+});
+
+describe("方案排不出来、重新开始", () => {
+  /** 只有 Sam 参加，他 8 点以后才有空：徒步加晚餐排不进去。 */
+  async function stuck(h: Harness): Promise<Outbound[]> {
+    await setUpEvent(h, "sam. count me out");
+    return answer(h, SAM, "sure", "after 8", "none", "I can drive", "2", "north station", "yeah", "yep");
+  }
+
+  const STUCK = `I couldn't make a plan that works yet. Nobody's free for the whole outing in that window — try a wider window or a shorter plan. Tell me what to change, or say "new plan" to start over.`;
+
+  test("排不出来时说清楚卡在哪、怎么改、怎么重新开始；之后随口说一句也是这些，而不是一句空话", async () => {
+    const h = new Harness();
+    const out = await stuck(h);
+    expect(h.event().status).toBe("REVIEW");
+    expect(textsTo(out, ALEX)).toEqual([`All 1 ready.\n${STUCK}`]);
+    expect(textsTo(await h.send(ALEX, "hmm"), ALEX)).toEqual([STUCK]);
+  });
+
+  test("已经有活动时又发了一个新活动：提示可以说 new plan 重新开始，或者说要改什么", async () => {
+    const h = new Harness();
+    await stuck(h);
+    expect(textsTo(await h.send(ALEX, "plan a hike + dinner saturday near campus, max $40 each"), ALEX)).toEqual([
+      `You're already planning hike + dinner for Saturday. To start a different one, say "new plan". To change this one, just tell me what to change.`,
+    ]);
+  });
+
+  test("new plan：还没发布的活动整个放下，谁都不通知；接着就能发起新活动", async () => {
+    const h = new Harness();
+    await stuck(h);
+    const out = await h.send(ALEX, "new plan");
+    expect(recipients(out)).toEqual([ALEX]);
+    expect(textsTo(out, ALEX)).toEqual(["OK — I've dropped hike + dinner. What are you planning now?"]);
+    expect(h.store.getSession(ALEX)?.eventId).toBeUndefined();
+    expect(h.store.getSession(SAM)?.eventId).toBeUndefined();
+    expect(textsTo(await h.send(ALEX, "plan a picnic + dinner sunday near campus, max $30 each"), ALEX)).toEqual(["What window works on Sunday — say 2 to 10 PM?"]);
+    expect(h.store.listEvents()).toHaveLength(2);
+  });
+
+  test("start over 后面直接跟着新活动：马上开始新活动", async () => {
+    const h = new Harness();
+    await stuck(h);
+    expect(textsTo(await h.send(ALEX, "start over: plan a picnic + dinner sunday near campus, max $30 each"), ALEX)).toEqual([
+      "What window works on Sunday — say 2 to 10 PM?",
+    ]);
+    expect(h.store.listEvents().map((event) => event.title)).toEqual(["hike + dinner", "picnic + dinner"]);
+  });
+
+  test("问 what's the new plan? 不会把活动放下", async () => {
+    const h = new Harness();
+    await stuck(h);
+    await h.send(ALEX, "what's the new plan?");
+    expect(h.store.getSession(ALEX)?.eventId).toBe(h.event().id);
+  });
+
+  test("new plan：已经发布的活动照旧，参加的人还能找我问；组织者开始规划下一场", async () => {
+    const h = new Harness();
+    await everyoneConfirms(h);
+    await h.send(ALEX, "just called, they said they can do it");
+    await h.send(ALEX, "approve A");
+    const out = await h.send(ALEX, "new plan");
+    expect(recipients(out)).toEqual([ALEX]);
+    expect(textsTo(out, ALEX)).toEqual(["OK — hike + dinner stays as planned. What are you planning next?"]);
+    expect(h.store.getSession(ALEX)?.eventId).toBeUndefined();
+    expect(h.store.getSession(SAM)?.eventId).toBe(h.event().id);
   });
 });

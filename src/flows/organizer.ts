@@ -7,11 +7,14 @@ import {
   hasChangeCue,
   isInviteRequest,
   isPlanRequest,
+  looksLikeNewEvent,
   looksLikePlan,
   parseApproval,
   parseDay,
+  parseBudgetReply,
   parseJoining,
   parseMoneyCents,
+  parseNewPlan,
   parseTimeWindow,
   parseVerification,
   parseYesNo,
@@ -21,7 +24,7 @@ import { nameFor } from "../core/handle";
 import { bumpInput, transition } from "../core/state";
 import { findCandidates } from "../maps";
 import { say, summary, type Outbound } from "../out/actions";
-import { templates as t } from "../out/imessage";
+import { dayName, templates as t } from "../out/imessage";
 import { planView } from "../out/privacy";
 import { fmtMoney, fmtWindow, todayIn, weekdayName } from "../shared/time";
 import type { Event, EventPatch, Extraction, Session } from "../shared/types";
@@ -45,9 +48,12 @@ function missingOrganizerFields(event: Event): OrganizerField[] {
   return missing;
 }
 
+/** 组织者只说了几点开始（"after 3"）、还没有结束时间时，先按晚上 10 点（问时间窗时举的例子），摘要里会给他确认。 */
+const DEFAULT_WINDOW_END = "22:00";
+
 function applyEventPatch(event: Event, patch: EventPatch): Event {
   const start = patch.window?.start ?? event.window?.start;
-  const end = patch.window?.end ?? event.window?.end;
+  const end = patch.window?.end ?? event.window?.end ?? (start ? DEFAULT_WINDOW_END : undefined);
   return {
     ...event,
     title: patch.title ?? event.title,
@@ -77,7 +83,8 @@ function fallbackEventPatch(text: string, today: string, asked?: OrganizerField)
     if (window?.start || window?.end) patch.window = window;
   }
   if (tryAll || asked === "budget") {
-    const cents = parseMoneyCents(text);
+    // 正在问预算时，句子里唯一的数字就是金额（"I want to do 50"）；其他时候要有 $ 之类的说法，免得把 "can we do 4?" 当成 $4
+    const cents = asked === "budget" ? parseBudgetReply(text) : parseMoneyCents(text);
     if (cents !== undefined) patch.budgetCapCents = cents;
   }
   if (asked === "title") patch.title = text.trim();
@@ -136,7 +143,9 @@ function askNext(deps: FlowDeps, turn: Turn, session: Session, event: Event, ai:
     return [summary(turn.handle, t.organizerSummary(event))];
   }
   deps.db.putSession({ ...session, awaiting: undefined, asked: next });
-  return [say(turn.handle, nextQuestion(ai, next, t.organizerAsk(next, event)))];
+  // 同一个问题又要问一遍，说明上一句没听懂：换个说法、给个例子
+  const template = session.asked === next ? t.organizerRetry(next, event) : t.organizerAsk(next, event);
+  return [say(turn.handle, nextQuestion(ai, next, template))];
 }
 
 async function startEvent(deps: FlowDeps, turn: Turn): Promise<Outbound[]> {
@@ -251,6 +260,8 @@ async function manageTurn(deps: FlowDeps, turn: Turn, session: Session, event: E
   if (verified !== undefined) return verify(deps, event, verified, text);
   if (isPlanRequest(text) && event.status !== "PUBLISHED") return startReview(deps, event, { requested: true });
   if (isInviteRequest(text) || turn.incoming.some((item) => item.kind === "contact")) return inviteTurn(deps, turn, session, event, false);
+  // 又发来一个新活动（"plan a picnic sunday"）：告诉他怎么重新开始，而不是当成改设置或补答自己的约束
+  if (looksLikeNewEvent(text)) return [say(organizer, t.alreadyPlanning(event.title, dayName(event)))];
 
   const patch = await eventChange(deps, turn, event);
   if (patch) return changeEvent(deps, event, patch);
@@ -268,8 +279,29 @@ async function manageTurn(deps: FlowDeps, turn: Turn, session: Session, event: E
   return [say(organizer, help(deps, event))];
 }
 
+/**
+ * 组织者说 "new plan"：这一场放一边，重新开始（hackathon 版一个人同时只规划一场）。
+ * - 还没发布：整场放下，所有人的会话都和它脱开，它不会再推进；
+ * - 已经发布：照旧，参加的人还能找我问，只是组织者开始规划下一场。
+ * 命令后面直接说了新活动（"start over: plan a picnic sunday"）就马上开始。
+ */
+async function startOver(deps: FlowDeps, turn: Turn, event: Event, rest: string): Promise<Outbound[]> {
+  const published = event.status === "PUBLISHED";
+  const handles = published ? [event.organizer] : deps.db.membersOf(event.id).map((member) => member.handle);
+  for (const handle of new Set([turn.handle, ...handles])) {
+    if (deps.db.session(handle).eventId === event.id) deps.db.putSession({ handle });
+  }
+  if (looksLikeNewEvent(rest)) {
+    const incoming = turn.incoming.filter((item) => item.kind === "text").slice(-1).map((item) => ({ ...item, text: rest }));
+    return startEvent(deps, { ...turn, incoming });
+  }
+  return [say(turn.handle, t.startedOver(event.title, published))];
+}
+
 export async function organizerTurn(deps: FlowDeps, turn: Turn, session: Session): Promise<Outbound[]> {
   const event = session.eventId ? deps.db.event(session.eventId) : undefined;
   if (!event) return startEvent(deps, turn);
+  const restart = parseNewPlan(textOf(turn));
+  if (restart) return startOver(deps, turn, event, restart.rest);
   return event.status === "DRAFT" ? draftTurn(deps, turn, session, event) : manageTurn(deps, turn, session, event);
 }

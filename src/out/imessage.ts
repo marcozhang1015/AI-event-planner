@@ -56,7 +56,7 @@ function profileLine(answer: Answer, pickup: Place | undefined): string {
         : undefined;
   return [
     answer.allergies && (answer.allergies.length ? `allergic to ${answer.allergies.join(", ")}` : "no food allergies"),
-    answer.diet?.length ? `doesn't eat ${answer.diet.join(", ")}` : undefined,
+    answer.diet?.length ? answer.diet.join(", ") : undefined,
     ride,
   ]
     .filter(Boolean)
@@ -178,6 +178,20 @@ export const templates = {
     }
   },
 
+  /** 上一句没听懂、同一个问题要再问一遍：换个说法，给个怎么回答的例子。 */
+  organizerRetry(field: string, event: Event): string {
+    switch (field) {
+      case "day":
+        return `Sorry, I didn't catch that. Which day? Something like "Saturday" or "Oct 3".`;
+      case "window":
+        return `Sorry, I didn't catch that. What hours on ${dayName(event)}? Something like "2 to 10 PM" or "after 3".`;
+      case "budget":
+        return "Sorry, I didn't catch that. What's the most each person should spend? A number is enough, like $40 — it keeps the plan from surprising anyone.";
+      default:
+        return templates.organizerAsk(field, event);
+    }
+  },
+
   organizerSummary(event: Event): string {
     const lines = [
       `• ${event.day ? weekdayName(event.day) : "Day TBD"}${event.window ? ` ${fmtWindow(event.window)}` : ""} · ${event.title}${event.area ? ` · ${event.area.label}` : ""}${event.headcount ? ` · ${event.headcount} people` : ""}`,
@@ -194,6 +208,8 @@ export const templates = {
   whatToChange: () => "What should I change?",
 
   askInvitees: () => "Who's coming? Share their contacts or just type names.",
+
+  inviteesLater: () => "No rush — send me their names or contacts whenever you're ready.",
 
   invitesSent: (names: string[]) => `Got it. Texting ${listNames(names)} now — you can watch replies come in here:`,
 
@@ -248,8 +264,35 @@ export const templates = {
         return event.budgetCapCents !== undefined
           ? `Last one: ${organizerName} set ${fmtMoney(event.budgetCapCents)}/person as the max. Does that work for you?`
           : "Last one: what's the most you'd want to spend?";
+      // 不接受组织者定的上限之后：问本人的上限。组织者确实看不到具体数字（隐私投影只给他原因类别）
+      case "own_budget":
+        return `No problem — what's the most you'd want to spend? ${organizerName} won't see the number.`;
       default:
         return "Anything else I should know?";
+    }
+  },
+
+  /** 上一句没听懂、同一个问题要再问一遍：换个说法，给个怎么回答的例子。`question` 是原来的问题（没有专门说法时用它）。 */
+  attendeeRetry(field: string, event: Event, question: string): string {
+    switch (field) {
+      case "free":
+        return `Sorry, I didn't catch that. Roughly when are you free ${dayName(event)}? Something like "after 3" or "anytime" works.`;
+      case "remembered":
+        return "Sorry, I didn't catch that. Is all that still right? A yes or no is perfect.";
+      case "allergies":
+        return `Sorry, I didn't catch that. Any food allergies or things you don't eat? List them, or say "none".`;
+      case "drives":
+        return `Sorry, I didn't catch that. Will you drive, or do you need a ride? "I can drive" or "need a ride" is perfect.`;
+      case "seats":
+        return "Sorry, I didn't catch that. How many passengers can you take? Just a number, like 2.";
+      case "budget":
+        return event.budgetCapCents !== undefined
+          ? `Sorry, I didn't catch that. Does ${fmtMoney(event.budgetCapCents)}/person work for you? Yes, no, or tell me your max.`
+          : "Sorry, I didn't catch that. What's the most you'd want to spend? Just a number, like 30.";
+      case "own_budget":
+        return "Sorry, I didn't catch that. What's the most you'd want to spend? Just a number, like 30.";
+      default:
+        return question;
     }
   },
 
@@ -269,7 +312,7 @@ export const templates = {
     const lines = [
       free ? `• Free ${free}${answer.homeBy ? `, home by ${fmtTime(answer.homeBy)}` : ""}` : undefined,
       answer.allergies?.length ? `• Allergic to ${answer.allergies.join(", ")}` : "• No food allergies",
-      answer.diet?.length ? `• Doesn't eat: ${answer.diet.join(", ")}` : undefined,
+      answer.diet?.length ? `• Diet: ${answer.diet.join(", ")}` : undefined,
       answer.drives === "no"
         ? `• Needs a ride${pickup ? `, pickup at ${pickup.name}` : ""}`
         : `• ${answer.drives === "if_needed" ? "Can drive if needed" : "Driving"}${answer.seats !== undefined ? `, ${answer.seats} seats` : ""}${pickup ? `, from ${pickup.name}` : ""}`,
@@ -306,7 +349,8 @@ export const templates = {
 
   // 方案（组织者）
 
-  allReady: (count: number) => `All ${count} ready. Here's what works:`,
+  // 方案前面的引导语只说发生了什么：下一行可能是方案，也可能是排不出来
+  allReady: (count: number) => `All ${count} ready.`,
 
   planMessage(plan: PlanView): string {
     const [a, b] = plan.options;
@@ -326,14 +370,14 @@ export const templates = {
 
   planPrompt(plan: PlanView): string {
     const [a, b] = plan.options;
-    if (!a) return "Tell me what to change and I'll try again.";
+    if (!a) return templates.noPlan(plan.conflicts);
     const alternative = b ? ` (or "approve B")` : "";
     return a.status === "NEEDS_VERIFICATION"
       ? `Reply "approve A" once it's confirmed${alternative}, or tell me what to change.`
       : `Reply "approve A" and I'll send everyone their details${alternative}, or tell me what to change.`;
   },
 
-  noPlan: (conflicts: string[]) => `I couldn't make a plan that works yet. ${conflicts.join(" ")}`,
+  noPlan: (conflicts: string[]) => `I couldn't make a plan that works yet. ${conflicts.join(" ")} Tell me what to change, or say "new plan" to start over.`,
 
   checkingDrivers: (names: string[]) => `One sec — checking with ${listNames(names)} about driving first.`,
 
@@ -354,7 +398,7 @@ export const templates = {
       .join("\n");
   },
 
-  replanned: () => "Heads up — someone's answers changed, so here's the updated plan:",
+  replanned: () => "Heads up — someone's answers changed.",
 
   eventUpdated: (line: string) => `Updated: ${line}. I'll use that when I make the plan.`,
 
@@ -376,7 +420,7 @@ export const templates = {
     const a = plan?.options[0];
     switch (reason) {
       case "stale":
-        return "Something changed since that plan — here's the latest:";
+        return "Something changed since that plan.";
       case "infeasible":
         return "There's no workable plan to approve yet.";
       case "ambiguous":
@@ -403,6 +447,14 @@ export const templates = {
 
   reviewHelp: (plan: PlanView | undefined) =>
     plan?.state === "update" ? `Reply "approve" to send the update, or tell me what to change.` : plan ? templates.planPrompt(plan) : `Say "plan it" when you're ready.`,
+
+  /** 已经有一场在规划，组织者又发来一个新活动。 */
+  alreadyPlanning: (title: string, dayName: string) =>
+    `You're already planning ${title} for ${dayName}. To start a different one, say "new plan". To change this one, just tell me what to change.`,
+
+  /** 组织者说 new plan 之后：没发布的活动放下了；已经发布的照旧。 */
+  startedOver: (title: string, published: boolean) =>
+    published ? `OK — ${title} stays as planned. What are you planning next?` : `OK — I've dropped ${title}. What are you planning now?`,
 
   // 司机
 

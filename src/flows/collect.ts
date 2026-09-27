@@ -5,15 +5,19 @@ import type { BrainContext } from "../brain/extract";
 import {
   isDecline,
   isSkip,
+  parseBudgetReply,
   parseChoice,
+  parseDayPart,
   parseDrives,
+  parseDrivesReply,
   parseEmail,
+  parseFood,
   parseHomeBy,
-  parseList,
-  parseMoneyCents,
   parseSeats,
+  parseSeatsReply,
   parseTimeWindow,
   parseYesNo,
+  rejectsAmount,
 } from "../brain/parse";
 import { distanceKm } from "../core/geo";
 import { correctsProfile, dropRemembered, remember } from "../core/memory";
@@ -30,6 +34,8 @@ import { afterConfirm } from "./planning";
 
 const ATTENDEE_FIELDS = ["free", "remembered", "allergies", "drives", "seats", "pickup", "budget"] as const;
 type AttendeeField = (typeof ATTENDEE_FIELDS)[number];
+/** 上一个问题问的是什么：一般是某个字段；own_budget 是本人不接受组织者的上限之后，改问他自己最多花多少。 */
+type Asked = AttendeeField | "own_budget";
 
 /** 这个人现在是什么状态、答到哪了。 */
 export interface Collecting {
@@ -93,26 +99,31 @@ function parseNear(text: string): string | undefined {
 }
 
 /** LLM 不可用时的规则解析。`asked` 是上一个问题问的字段；没有就只试不容易误判的几项。 */
-function fallbackAnswerPatch(text: string, event: Event, asked?: AttendeeField): AnswerPatch {
+function fallbackAnswerPatch(text: string, event: Event, asked?: Asked): AnswerPatch {
   const patch: AnswerPatch = {};
   // 确认记忆时，回复里也可能顺带改了开车、座位或集合点
   const tryAll = asked === undefined || asked === "remembered";
   if (tryAll || asked === "free") {
-    const free = parseTimeWindow(text, event.window);
+    // 正在问有空的时间时，"evening"、"yes"（整段都行）也算回答
+    const free = parseTimeWindow(text, event.window) ?? (asked === "free" ? (parseDayPart(text) ?? (parseYesNo(text) === true ? {} : undefined)) : undefined);
     if (free) patch.free = free;
   }
   const homeBy = parseHomeBy(text, event.window);
   if (homeBy) patch.homeBy = homeBy;
   if (asked === "allergies") {
-    const allergies = parseList(text);
-    if (allergies) patch.allergies = allergies;
+    const food = parseFood(text);
+    if (food) {
+      patch.allergies = food.allergies;
+      if (food.diet) patch.diet = food.diet;
+    }
   }
+  // 正在问的问题才认 yes / no、"just one" 这类短回答；其他时候要说得明确
   if (tryAll || asked === "drives") {
-    const drives = parseDrives(text);
+    const drives = asked === "drives" ? parseDrivesReply(text) : parseDrives(text);
     if (drives) patch.drives = drives;
   }
   if (tryAll || asked === "seats" || asked === "drives") {
-    const seats = parseSeats(text);
+    const seats = asked === "seats" ? parseSeatsReply(text) : parseSeats(text);
     if (seats !== undefined) patch.seats = seats;
   }
   if (asked === "pickup") patch.pickupQuery = parseNear(text) ?? text.trim();
@@ -120,10 +131,11 @@ function fallbackAnswerPatch(text: string, event: Event, asked?: AttendeeField):
     const near = parseNear(text);
     if (near) patch.pickupQuery = near;
   }
-  if (asked === "budget") {
-    const cents = parseMoneyCents(text);
+  if (asked === "budget" || asked === "own_budget") {
+    const cents = parseBudgetReply(text);
     if (cents !== undefined) patch.budgetCapCents = cents;
-    else if (parseYesNo(text) === true && event.budgetCapCents !== undefined) patch.budgetCapCents = event.budgetCapCents;
+    // 回 yes 只能是接受组织者定的上限
+    else if (asked === "budget" && parseYesNo(text) === true && event.budgetCapCents !== undefined) patch.budgetCapCents = event.budgetCapCents;
   }
   const email = parseEmail(text);
   if (email) patch.email = email;
@@ -163,7 +175,7 @@ export async function collectTurn(deps: FlowDeps, turn: Turn, c: Collecting, don
   }
 
   const ai = text ? await deps.brain.attendee(answerContext(deps, turn, event, answer)) : undefined;
-  const asked = confirming || answer.confirmed ? undefined : session.awaiting === "pickup_choice" ? "pickup" : (session.asked as AttendeeField | undefined);
+  const asked = confirming || answer.confirmed ? undefined : session.awaiting === "pickup_choice" ? "pickup" : (session.asked as Asked | undefined);
   const patch = ai?.patch ?? fallbackAnswerPatch(text, event, asked);
   let next = applyAnswerPatch(answer, patch, event);
 
@@ -194,11 +206,13 @@ export async function collectTurn(deps: FlowDeps, turn: Turn, c: Collecting, don
     if ("reply" in resolved) return resolved.reply;
     next = resolved;
   }
-  return saveAndAsk(deps, turn, c, changed ? { ...next, confirmed: false } : next, ai);
+  // 不接受组织者定的上限（回了 no），或者已经在问本人的上限：接着问他自己最多花多少，而不是把原来的问题再问一遍
+  const ownBudget = asked === "own_budget" || (asked === "budget" && next.budgetCapCents === undefined && rejectsAmount(text));
+  return saveAndAsk(deps, turn, c, changed ? { ...next, confirmed: false } : next, ai, ownBudget);
 }
 
-/** 存下答案，问下一个缺的字段；都齐了就发摘要。 */
-function saveAndAsk(deps: FlowDeps, turn: Turn, c: Collecting, next: Answer, ai: Extraction<AnswerPatch> | undefined): Outbound[] {
+/** 存下答案，问下一个缺的字段；都齐了就发摘要。`ownBudget`：问预算时改问本人最多花多少。 */
+function saveAndAsk(deps: FlowDeps, turn: Turn, c: Collecting, next: Answer, ai: Extraction<AnswerPatch> | undefined, ownBudget = false): Outbound[] {
   const { event, answer } = c;
   const session = withoutPickupState(c.session);
   deps.db.putAnswer(next);
@@ -211,8 +225,12 @@ function saveAndAsk(deps: FlowDeps, turn: Turn, c: Collecting, next: Answer, ai:
     const firstTime = !deps.db.person(turn.handle);
     return [summary(turn.handle, dropped ? t.driverDropped(pickup?.name) : t.attendeeSummary(next, pickup, answer.confirmed, firstTime))];
   }
-  deps.db.putSession({ ...session, awaiting: undefined, asked: field });
-  return [say(turn.handle, nextQuestion(ai, field, t.attendeeAsk(field, event, organizerName(deps.db, event), next, pickup)))];
+  const ask: Asked = field === "budget" && ownBudget ? "own_budget" : field;
+  deps.db.putSession({ ...session, awaiting: undefined, asked: ask });
+  const question = t.attendeeAsk(ask, event, organizerName(deps.db, event), next, pickup);
+  // 同一个问题又要问一遍，说明上一句没听懂：换个说法、给个例子，而不是原样重复
+  const template = c.session.asked === ask ? t.attendeeRetry(ask, event, question) : question;
+  return [say(turn.handle, nextQuestion(ai, field, template))];
 }
 
 /** 确认摘要：记下答案和记忆，版本号 +1，再看要不要重新求解。第一次确认时问邮箱。 */

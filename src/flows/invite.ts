@@ -1,7 +1,7 @@
 // 邀请（§4.3 流程 1）：从名单和联系人卡片里认人 → 私聊开场白。
 // 组织者说自己也去时，给他建一份答案，在他的私聊里补问约束。
 
-import { parseDrives, parseJoining, parseSeats } from "../brain/parse";
+import { isDeferral, parseDrives, parseJoining, parseSeats } from "../brain/parse";
 import { nameFor, normalizeHandle, type Contact } from "../core/handle";
 import { hasProfile, prefill } from "../core/memory";
 import { bumpInput } from "../core/state";
@@ -19,7 +19,8 @@ const STOPWORDS = new Set(
   (
     "i im i'm me my you we us our they them and or the a an to for of in on at with too also just now then maybe please pls " +
     "thanks thank thx ok okay yes yeah sure hi hey invite add plus everyone all crew guys folks people friends team gang family " +
-    "is are be it that this can could will would drive driving coming come join joining"
+    "is are be it that this can could will would drive driving coming come join joining " +
+    "idk dunno later soon yet sec second moment minute wait hold hmm tbd lemme"
   ).split(" "),
 );
 
@@ -76,7 +77,7 @@ function resolveInvitees(turn: Turn, contacts: Contact[], organizer: Handle): { 
 export function inviteTurn(deps: FlowDeps, turn: Turn, session: Session, event: Event, firstList: boolean): Outbound[] {
   const organizer = event.organizer;
   const { found, unknown } = resolveInvitees(turn, deps.contacts, organizer);
-  if (!found.length) return [say(organizer, unknown.length ? t.unknownInvitees(unknown) : t.askInvitees())];
+  if (!found.length) return [say(organizer, unknown.length ? t.unknownInvitees(unknown) : isDeferral(textOf(turn)) ? t.inviteesLater() : t.askInvitees())];
 
   const host = deps.db.member(event.id, organizer);
   const invites: Outbound[] = [];
